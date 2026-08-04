@@ -1,0 +1,6 @@
+{
+  "language": "CEL",
+  "site": "condition-edge",
+  "source": "secret.value == 'x'",
+  "expectedFailure": "expression_identifier_unknown"
+}

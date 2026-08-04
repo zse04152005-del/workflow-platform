@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.workflow-platform.example/dsl/workflow-definition-v1.schema.json",
+  "title": "Workflow Platform Definition DSL v1",
+  "description": "Deterministic MVP workflow graph contract. Graph semantics are compiled separately by G3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "catalogVersion", "triggers", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "$ref": "#/$defs/businessName" },
+    "description": { "type": "string", "maxLength": 1000 },
+    "catalogVersion": { "type": "integer", "minimum": 1 },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/trigger" }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 500,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "metadata": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    }
+  },
+  "$defs": {
+    "businessName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "localId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "reference": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+    },
+    "safeExpression": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?![\\s\\S]*(?:\\bnow\\s*\\(|\\brandom\\s*\\(|System\\.|Runtime\\.|class\\b))[\\s\\S]+$"
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxAttempts", "strategy", "initialDelay"],
+      "properties": {
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "strategy": { "enum": ["fixed", "linear", "exponential"] },
+        "initialDelay": { "type": "string", "format": "duration" },
+        "maxDelay": { "type": "string", "format": "duration" },
+        "maxElapsedTime": { "type": "string", "format": "duration" },
+        "increment": { "type": "string", "format": "duration" },
+        "multiplier": { "type": "number", "minimum": 1, "maximum": 10 },
+        "jitterRatio": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "strategy": { "const": "fixed" } } },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["increment"] },
+                { "required": ["multiplier"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "strategy": { "const": "linear" } } },
+          "then": {
+            "required": ["increment"],
+            "not": { "required": ["multiplier"] }
+          }
+        },
+        {
+          "if": { "properties": { "strategy": { "const": "exponential" } } },
+          "then": {
+            "required": ["multiplier"],
+            "not": { "required": ["increment"] }
+          }
+        }
+      ]
+    },
+    "manualTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "manual" }
+      }
+    },
+    "httpTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "authentication", "idempotencyRequired"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "http" },
+        "authentication": { "enum": ["oidc", "hmac"] },
+        "idempotencyRequired": { "const": true },
+        "hmacSecretRef": { "$ref": "#/$defs/reference" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "authentication": { "const": "hmac" } } },
+          "then": { "required": ["hmacSecretRef"] },
+          "else": { "not": { "required": ["hmacSecretRef"] } }
+        }
+      ]
+    },
+    "cronTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "expression", "timezone", "misfirePolicy"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "cron" },
+        "expression": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 120,
+          "pattern": "^[0-9*/?,LW#\\-]+(?:[ \\t]+[0-9*/?,LW#\\-]+){4,6}$"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z_+-]+(?:/[A-Za-z0-9_+\\-]+)+$"
+        },
+        "misfirePolicy": { "enum": ["skip", "fire_once", "catch_up_limited"] },
+        "catchUpLimit": { "type": "integer", "minimum": 1, "maximum": 100 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "misfirePolicy": { "const": "catch_up_limited" } } },
+          "then": { "required": ["catchUpLimit"] },
+          "else": { "not": { "required": ["catchUpLimit"] } }
+        }
+      ]
+    },
+    "trigger": {
+      "oneOf": [
+        { "$ref": "#/$defs/manualTrigger" },
+        { "$ref": "#/$defs/httpTrigger" },
+        { "$ref": "#/$defs/cronTrigger" }
+      ]
+    },
+    "startNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "start" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 }
+      }
+    },
+    "endNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "end" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "outcome": { "enum": ["succeeded", "failed"] }
+      }
+    },
+    "httpNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "http" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "timeout": { "type": "string", "format": "duration" },
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["connectorRef", "method"],
+          "properties": {
+            "connectorRef": { "$ref": "#/$defs/reference" },
+            "secretRefs": {
+              "type": "array",
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/reference" }
+            },
+            "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+            "pathTemplate": { "type": "string", "maxLength": 1000 },
+            "headers": {
+              "type": "object",
+              "maxProperties": 50,
+              "additionalProperties": { "$ref": "#/$defs/safeExpression" }
+            },
+            "bodyExpression": { "$ref": "#/$defs/safeExpression" },
+            "resultExpression": { "$ref": "#/$defs/safeExpression" }
+          }
+        }
+      }
+    },
+    "conditionNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "condition" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["expression"],
+          "properties": {
+            "expression": { "$ref": "#/$defs/safeExpression" }
+          }
+        }
+      }
+    },
+    "delayNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "delay" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            { "required": ["duration"], "not": { "required": ["expiresAtExpression"] } },
+            { "required": ["expiresAtExpression"], "not": { "required": ["duration"] } }
+          ],
+          "properties": {
+            "duration": { "type": "string", "format": "duration" },
+            "expiresAtExpression": { "$ref": "#/$defs/safeExpression" }
+          }
+        }
+      }
+    },
+    "humanTaskNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "executorVersion", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "const": "human_task" },
+        "executorVersion": { "type": "integer", "minimum": 1 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["formSchema", "timeoutPolicy"],
+          "oneOf": [
+            { "required": ["candidateRole"], "not": { "required": ["assigneeExpression"] } },
+            { "required": ["assigneeExpression"], "not": { "required": ["candidateRole"] } }
+          ],
+          "properties": {
+            "candidateRole": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "assigneeExpression": { "$ref": "#/$defs/safeExpression" },
+            "formSchema": { "type": "object", "minProperties": 1 },
+            "deadline": { "type": "string", "format": "duration" },
+            "timeoutPolicy": { "enum": ["none", "fail", "auto_approve", "auto_reject", "escalate"] }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "timeoutPolicy": { "const": "none" } } },
+              "then": { "not": { "required": ["deadline"] } },
+              "else": { "required": ["deadline"] }
+            }
+          ]
+        }
+      }
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/startNode" },
+        { "$ref": "#/$defs/endNode" },
+        { "$ref": "#/$defs/httpNode" },
+        { "$ref": "#/$defs/conditionNode" },
+        { "$ref": "#/$defs/delayNode" },
+        { "$ref": "#/$defs/humanTaskNode" }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "on"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "from": { "$ref": "#/$defs/localId" },
+        "to": { "$ref": "#/$defs/localId" },
+        "on": { "enum": ["success", "failure", "always", "condition"] },
+        "when": { "$ref": "#/$defs/safeExpression" },
+        "mapping": {
+          "type": "object",
+          "maxProperties": 100,
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$" },
+          "additionalProperties": { "$ref": "#/$defs/safeExpression" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "on": { "const": "condition" } } },
+          "then": { "required": ["when"] },
+          "else": { "not": { "required": ["when"] } }
+        }
+      ]
+    }
+  }
+}

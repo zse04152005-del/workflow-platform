@@ -1,0 +1,19 @@
+{
+  "component": "runtime-happy-path-e2e",
+  "version": 1,
+  "task": "G4-17",
+  "requirement": "REQ-E2E-001",
+  "flow": ["http-trigger", "start", "condition", "managed-http", "delay", "end"],
+  "infrastructure": ["postgresql-testcontainer", "kafka-testcontainer"],
+  "assertions": [
+    "idempotent-trigger-replay",
+    "condition-selected-branch",
+    "managed-https-policy-and-mapping",
+    "persisted-delay-resume-time",
+    "control-plane-context-recreated",
+    "worker-attempts-and-processed-event-dedup",
+    "instance-succeeded",
+    "query-api-payload-reference-only"
+  ],
+  "test": "test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java"
+}

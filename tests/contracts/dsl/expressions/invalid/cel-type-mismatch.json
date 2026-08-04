@@ -1,0 +1,6 @@
+{
+  "language": "CEL",
+  "site": "condition-node",
+  "source": "input.owner",
+  "expectedFailure": "expression_type_mismatch"
+}

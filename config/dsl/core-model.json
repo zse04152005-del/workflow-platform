@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-01",
+  "requirement": "REQ-DSL-001",
+  "dslSchema": "schemas/dsl/workflow-definition-v1.schema.json",
+  "javaPackage": "com.workflowplatform.contracts.dsl",
+  "root": {
+    "required": ["schemaVersion", "name", "catalogVersion", "triggers", "nodes", "edges"],
+    "optional": ["description", "inputSchema", "outputSchema", "metadata"],
+    "immutableVersion": 1,
+    "catalogVersionMinimum": 1
+  },
+  "node": {
+    "types": ["start", "end", "http", "condition", "delay", "human_task"],
+    "commonRequired": ["id", "type", "executorVersion"],
+    "commonOptional": ["displayName"],
+    "executorVersionMinimum": 1,
+    "retryAllowed": ["http"],
+    "executionTimeoutAllowed": ["http"]
+  },
+  "edge": {
+    "required": ["id", "from", "to", "on"],
+    "optional": ["when", "mapping"],
+    "transitions": ["success", "failure", "always", "condition"],
+    "conditionRequiresWhen": true,
+    "nonConditionForbidsWhen": true
+  },
+  "parameters": {
+    "definitionSchemas": ["inputSchema", "outputSchema"],
+    "mappingField": "mapping",
+    "mappingMaximum": 100,
+    "targetPattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$",
+    "expressionDefinition": "safeExpression",
+    "expressionMaximumLength": 2048
+  },
+  "retry": {
+    "required": ["maxAttempts", "strategy", "initialDelay"],
+    "optional": ["maxDelay", "maxElapsedTime", "increment", "multiplier", "jitterRatio"],
+    "strategies": ["fixed", "linear", "exponential"],
+    "maxAttemptsMinimum": 1,
+    "maxAttemptsMaximum": 10,
+    "multiplierMinimum": 1,
+    "multiplierMaximum": 10,
+    "jitterRatioMinimum": 0,
+    "jitterRatioMaximum": 1,
+    "strategyFields": {
+      "fixed": [],
+      "linear": ["increment"],
+      "exponential": ["multiplier"]
+    }
+  },
+  "timeout": {
+    "executionField": "timeout",
+    "humanDeadlineField": "deadline",
+    "delayFields": ["duration", "expiresAtExpression"],
+    "durationFormat": "duration",
+    "runtimeDurationMustBePositive": true
+  },
+  "limits": {
+    "triggersMinimum": 1,
+    "triggersMaximum": 20,
+    "nodesMinimum": 2,
+    "nodesMaximum": 500,
+    "edgesMinimum": 1,
+    "edgesMaximum": 2000,
+    "metadataMaximum": 32
+  },
+  "determinism": {
+    "versionBindings": ["schemaVersion", "catalogVersion", "executorVersion"],
+    "forbiddenExpressionTokens": ["now", "random", "System", "Runtime", "class"],
+    "arbitraryScriptNodeAllowed": false
+  },
+  "deferred": {
+    "G3-02": "JSON/YAML parsing, canonical JSON, checksum and byte-size limits",
+    "G3-03": "unique start, unique IDs, reachability, edge references and cycle rules",
+    "G3-04": "node-specific parameter types and connector/secret authorization",
+    "G3-05": "CEL/JSONPath grammar, type checking and resource sandbox",
+    "G3-10": "compiler property, compatibility and malicious-input suite"
+  },
+  "sourceBindings": {
+    "javaModelRoot": "shared-contracts/src/main/java/com/workflowplatform/contracts/dsl",
+    "javaTests": "shared-contracts/src/test/java/com/workflowplatform/contracts/dsl/WorkflowDslCoreModelTests.java",
+    "verifier": "scripts/dsl/verify-dsl-core-model.mjs",
+    "verifierTests": "scripts/dsl/test-dsl-core-model-verifier.mjs"
+  },
+  "document": "docs/architecture/dsl-core-model.md"
+}

@@ -1,0 +1,902 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "name": "enterprise-event-driven-workflow-platform",
+    "reviewedOn": "2026-07-30",
+    "sourceDocuments": {
+      "OUTLINE": "docs/planning/00-原始项目开发大纲.md",
+      "AUDIT": "docs/planning/01-项目大纲审计与优化基线.md",
+      "CONTROL": "docs/planning/02-项目开发总控清单.md"
+    },
+    "requiredMvpAcceptanceGates": [
+      "MVP-01",
+      "MVP-02",
+      "MVP-03",
+      "MVP-04",
+      "MVP-05",
+      "MVP-06",
+      "MVP-07",
+      "MVP-08",
+      "MVP-09",
+      "MVP-10"
+    ]
+  },
+  "requirements": [
+    {
+      "id": "REQ-ARCH-001",
+      "title": "模块化控制面、独立 Worker 与清晰依赖边界",
+      "source": ["OUTLINE §6, §17-§18", "AUDIT A-01, §3"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-01", "G11-03"],
+      "api": ["not-applicable: 架构边界不新增运行时 API；公开契约由 REQ-CONTRACT-001 管理"],
+      "events": ["implemented: file:docs/architecture/c4-architecture-views.md 记录控制面/Worker 的版本化事件、数据库租约及同步/异步边界 [G2-01]"],
+      "tables": ["not-applicable: 本项定义模块边界，实体归属由 ER 图和各领域需求管理"],
+      "tests": [
+        "implemented: file:scripts/architecture/verify-architecture-model.mjs 校验 Actor/Container/协议/事实源/模块源码/数据 owner/禁止依赖 [G2-01]",
+        "implemented: file:scripts/architecture/test-architecture-verifier.mjs 提供九类反向控制 [G2-01]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/c4-architecture-views.md 提供 C4 Level 1/2、模块依赖、数据所有权和禁止依赖 [G2-01]",
+        "implemented: file:docs/architecture/README.md 提供架构文档索引 [G2-01]",
+        "planned: G11-03 发布前汇总至少五份 ADR 与最终架构图包"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G2", "MVP-10"]
+    },
+    {
+      "id": "REQ-DATA-001",
+      "title": "统一数据约定、ER 模型、约束、索引与分区策略",
+      "source": ["OUTLINE §7-§8", "AUDIT A-03, A-04, A-11, A-14, §4"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-02", "G2-03", "G2-04", "G2-05", "G2-06", "G2-07", "G2-08", "G2-11"],
+      "api": [
+        "implemented: file:docs/architecture/domain-data-conventions.md 锁定 UUIDv7、RFC3339 UTC、枚举与错误码命名 [G2-02]",
+        "implemented: file:config/api/problem-details.json 将错误码约定落入 RFC 9457 Problem Details [G2-09]",
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 将 UUIDv7/UTC/枚举/RFC 9457 约定统一引用到 OpenAPI 3.1 [G2-10]"
+      ],
+      "events": [
+        "implemented: file:config/domain/conventions.json 锁定事件 ID、时间、枚举未知值和 Schema 错误行为 [G2-02]",
+        "implemented: file:schemas/events/event-envelope-v1.schema.json 锁定 UUIDv7/UTC/traceId/schemaVersion/payload 与未知可选字段兼容 [G2-10]"
+      ],
+      "tables": [
+        "implemented: file:docs/architecture/domain-data-conventions.md 定义 uuid/timestamptz(6)/审计/version/删除策略 [G2-02]",
+        "implemented: file:config/database/er-model.json 锁定 22 表、外键、唯一约束、关键索引、RLS 和分区候选 [G2-03]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V1__create_tenant_and_rbac.sql 创建首批五张真实表、约束、索引与 RLS [G2-04]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql 创建 definition/version/trigger/connector/secret 五张真实表及强制 RLS [G2-05]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 workflow/node/task/schedule 四张真实表、状态约束、强制 RLS 与受保护终态收口 [G2-06]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql 创建 Outbox/processed/idempotency/dead-letter/worker-lease 五张真实表、强制 RLS 与生命周期 guard [G2-07]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V5__create_human_audit_and_quota.sql 创建 human_task/audit_log/quota_usage、强制 RLS、append-only/生命周期 guard 与非重叠配额窗口 [G2-08]",
+        "implemented: file:config/database/g2-11-testcontainers.json 锁定全 Schema Catalog、约束探针和 Q-01～Q-10 查询计划契约 [G2-11]"
+      ],
+      "tests": [
+        "implemented: file:scripts/domain/verify-domain-conventions.mjs 校验机器约定与源码/迁移守卫 [G2-02]",
+        "implemented: file:scripts/domain/test-domain-conventions.mjs 提供八类反向控制 [G2-02]",
+        "implemented: file:scripts/database/verify-er-model.mjs 校验 owner/tenant/RLS/FK/索引/分区/查询契约 [G2-03]",
+        "implemented: file:scripts/database/test-er-model.mjs 提供九类 ER 反向控制 [G2-03]",
+        "implemented: file:scripts/database/test-tenant-rbac-migration.ps1 在真实 PostgreSQL 验证空库/重复迁移、约束、RLS 与最小权限 [G2-04]",
+        "implemented: file:scripts/database/verify-definition-migration.mjs 与真实 PostgreSQL V1→V2 套件验证 G2-05 模型、升级、约束、不可变历史和租户隔离 [G2-05]",
+        "implemented: file:scripts/database/verify-runtime-migration.mjs 与真实 PostgreSQL V2→V3 套件验证 G2-06 状态字段、Cron 快照、Task 终态保护、RLS 和租户优先索引 [G2-06]",
+        "implemented: file:scripts/database/verify-reliability-migration.mjs 与真实 PostgreSQL V3→V4 套件验证 G2-07 Outbox/去重/幂等/死信/fencing、RLS、生命周期与最小权限 [G2-07]",
+        "implemented: file:scripts/database/verify-human-audit-quota-migration.mjs 与真实 PostgreSQL V4→V5 套件验证 G2-08 首次决策/转交/超时、append-only 审计、配额窗口、RLS 与最小权限 [G2-08]",
+        "implemented: file:scripts/contracts/verify-public-contracts.mjs 验证 OpenAPI/DSL/Event 的 ID、UTC、枚举和版本约定 [G2-10]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/database/DatabaseMigrationIT.java 在 PostgreSQL 18.4 验证空库/重复迁移、Catalog、约束、RLS 和 Q-01～Q-10 默认优化器计划 [G2-11]",
+        "implemented: file:scripts/database/test-testcontainers-database-verifier.mjs 提供十二类 G2-11 静态门禁反向控制 [G2-11]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/domain-data-conventions.md 记录 ID/UTC/时区/枚举/错误码/审计/删除规范 [G2-02]",
+        "implemented: file:docs/architecture/database-er-model.md 提供三幅 Mermaid ER、22 表数据字典与查询/分区评审 [G2-03]",
+        "implemented: file:docs/architecture/definition-and-integration-migration.md 记录 G2-05 表、不可变性、作用域唯一性、Secret XOR 与升级边界 [G2-05]",
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 G2-06 状态/时间/租约、Definition-Version 与 Cron 快照绑定、Task 单次终态收口及升级边界 [G2-06]",
+        "implemented: file:docs/architecture/reliability-and-lease-migration.md 记录 G2-07 可靠消息、幂等、死信、Worker fencing、保留与实现边界 [G2-07]",
+        "implemented: file:docs/architecture/human-audit-quota-migration.md 记录 G2-08 人工任务、平台审计、配额窗口、权限和实现边界 [G2-08]",
+        "implemented: file:docs/architecture/public-contracts-and-compatibility.md 记录 OpenAPI/DSL/Event 公共数据与兼容边界 [G2-10]",
+        "implemented: file:docs/architecture/testcontainers-database-verification.md 记录全量 Catalog、约束/RLS、默认优化器计划与 Flyway/PostgreSQL 兼容风险 [G2-11]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G2", "MVP-10"]
+    },
+    {
+      "id": "REQ-IAM-001",
+      "title": "OIDC、租户、项目、成员、最小 RBAC 与跨租户隔离",
+      "source": ["OUTLINE §2.2, §3, §12", "AUDIT A-13, §5.1, MVP-05"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-04", "G6-01", "G6-02", "G6-03", "G6-04", "G6-05", "G6-06", "G8-02"],
+      "api": ["planned: OIDC 登录适配、租户/项目/成员/角色管理与带 tenant context 的业务 API [G6-02,G6-03]"],
+      "events": ["planned: 后台任务和领域事件强制携带可信 tenantId [G6-04]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V1__create_tenant_and_rbac.sql 创建 tenant/project/membership/role/role_binding、复合租户 FK 与强制 RLS [G2-04]",
+        "planned: G6-05 把可信 tenant context 接入其余关键业务表访问路径"
+      ],
+      "tests": [
+        "implemented: file:scripts/database/test-tenant-rbac-migration.ps1 验证无上下文关闭、读写隔离、跨租户 FK、伪造管理员旁路与最小权限 [G2-04]",
+        "planned: Token issuer/audience/expiry/signature、RBAC、IDOR、跨租户 API/任务/对象/密钥负向测试 [G6-02,G6-06]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/tenant-context-and-rbac-migration.md 记录事务上下文、RLS、角色分离、旁路与信任边界 [G2-04]",
+        "planned: ADR-005、权限矩阵、租户上下文与平台运维旁路说明 [G6-01,G6-03,G6-05]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G6", "MVP-05"]
+    },
+    {
+      "id": "REQ-SECRETS-001",
+      "title": "连接器、密钥引用、HTTP 出站安全与追加审计",
+      "source": ["OUTLINE §2.2, §4.1, §12, §19", "AUDIT A-08, A-18, §5.1, MVP-06, MVP-07"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-05", "G6-07", "G6-08", "G6-10", "G6-12", "G8-10"],
+      "api": ["planned: 连接器/密钥引用管理、审计查询与受管 endpoint API [G6-07,G8-10]"],
+      "events": ["planned: 审计事件仅含脱敏前后值、actor、reason、IP 和 traceId [G6-10]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql 创建 connector/secret_reference、作用域唯一索引、软删除与材料 XOR 约束 [G2-05]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V5__create_human_audit_and_quota.sql 创建 append-only audit_log、平台可空行、脱敏 JSON 形状与强制 RLS [G2-08]",
+        "planned: G6-10 将安全操作接入 AuditPort 并实施字段级脱敏策略"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-05-app-role-test.sql 验证租户隔离、软删除重名、local/external 严格 XOR 且不输出材料 [G2-05]",
+        "planned: 密钥越权/轮换/脱敏与 DNS/IP/协议/端口/逐跳重定向/响应大小 SSRF 测试 [G6-07,G6-08]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/definition-and-integration-migration.md 记录 Secret 引用、材料互斥、日志禁泄露与未实现边界 [G2-05]",
+        "planned: 威胁模型、密钥 Provider 边界、SSRF 策略、审计脱敏规则 [G6-12]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G6", "MVP-05", "MVP-06", "MVP-07"]
+    },
+    {
+      "id": "REQ-CONTRACT-001",
+      "title": "OpenAPI、统一错误、DSL/Event Schema 与兼容性规则",
+      "source": ["OUTLINE §9, §18", "AUDIT A-17, MVP-10"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-09", "G2-10", "G11-02"],
+      "api": [
+        "implemented: file:config/api/problem-details.json 锁定 RFC 9457、application/problem+json、11 个稳定错误码、traceId、字段 errors 与脱敏边界 [G2-09]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/api/error/GlobalProblemDetailsHandler.java 接入 Spring MVC validation/malformed/parameter/application/internal 异常映射 [G2-09]",
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 定义 15 个 planned operation 并统一引用 application/problem+json [G2-10]"
+      ],
+      "events": ["implemented: file:schemas/events/event-envelope-v1.schema.json 定义 eventId/eventType/occurredAt/tenantId/traceId/schemaVersion/payload Envelope 与消费者向前兼容 [G2-10]"],
+      "tables": ["not-applicable: 契约本身不新增表，持久化由对应领域需求定义"],
+      "tests": [
+        "implemented: file:scripts/contracts/test-problem-details-verifier.mjs 提供 RFC/媒体类型/成员/trace/validation/脱敏/状态/URI/重试性/源绑定 18 类反向控制 [G2-09]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/api/error/GlobalProblemDetailsHandlerTests.java 验证真实 ProblemDetail 序列化、头部、traceId、字段错误与 500 脱敏 [G2-09]",
+        "implemented: file:scripts/contracts/test-public-contracts-verifier.mjs 提供 operation/header/Problem/租户/字段/类型/枚举/版本/ref/fixture 等 22 类反向控制 [G2-10]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/problem-details-contract.md 记录 RFC 9457 形状、错误目录、trace、字段校验、脱敏与 Spring MVC 边界 [G2-09]",
+        "implemented: file:docs/architecture/public-contracts-and-compatibility.md 记录 OpenAPI 3.1、DSL/Event Schema 与兼容性规则 [G2-10]",
+        "planned: OpenAPI、DSL Schema、事件 Schema 与 SDK/调用示例 [G11-02]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G2", "G11", "MVP-10"]
+    },
+    {
+      "id": "REQ-DSL-001",
+      "title": "确定性 DSL、受限表达式、解析规范化与静态校验",
+      "source": ["OUTLINE §4.1, §4.3, §19", "AUDIT A-06, A-07, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-05", "G3-01", "G3-02", "G3-03", "G3-04", "G3-05", "G3-07", "G3-10"],
+      "api": ["implemented: file:api/openapi/workflow-platform.v1.openapi.json 与 WorkflowValidationController 实现 POST /api/v1/workflows/{workflowId}/validate，支持 current draft/supplied definition、revision/checksum、节点与字段级错误 [G3-07]"],
+      "events": ["not-applicable: DSL 校验失败不发布运行时事件"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql 创建 draft/published DSL、64 位 checksum、schema/catalog version 持久化约束 [G2-05]",
+        "implemented: file:config/dsl/core-model.json 锁定 schema/catalog/executor 三层版本绑定、节点/边/参数/重试/超时公共值模型 [G3-01]",
+        "implemented: file:config/dsl/parser-normalization.json 锁定 JSON/YAML、严格 UTF-8、1 MiB 输入/canonical 输出、确定性数字与 SHA-256 规则 [G3-02]",
+        "implemented: file:config/dsl/graph-validation.json 锁定唯一 Start、节点/边 ID、引用、transition、双向可达、禁止有向环和确定性拓扑序 [G3-03]",
+        "implemented: file:config/dsl/node-configuration-validation.json 锁定六类节点、三类触发器、参数类型、connector/secret 作用域解析与显式 use grant，完成原 G3-04/G3-05 边界中的 G3-04 [G3-04]",
+        "implemented: file:config/dsl/expression-sandbox.json 锁定受限 CEL、具名根 JSONPath、静态类型、预算与运行时沙箱 [G3-05]",
+        "implemented: file:config/definition/validate-api.json 锁定四阶段短路、40 个公开错误码、500 条上限、草稿绑定与 Secret-free RBAC/RLS 资源快照 [G3-07]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-05-app-role-test.sql 验证 DSL JSON object、checksum 格式、版本唯一性与不可变行 [G2-05]",
+        "implemented: file:tests/contracts/dsl/valid/refund-approval.json 提供 DSL v1 正反 JSON Schema fixture [G2-10]",
+        "implemented: file:shared-contracts/src/test/java/com/workflowplatform/contracts/dsl/WorkflowDslCoreModelTests.java 验证三种重试、正值 Duration、条件边、映射、深层不可变与后续职责边界 [G3-01]",
+        "implemented: file:scripts/dsl/test-dsl-core-model-verifier.mjs 以 18 类反向变异锁定机器契约、Schema、Java、fixture、文档和根门禁一致性 [G3-01]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowDefinitionParserTests.java 以 Java 21 项覆盖 JSON/YAML 等价、canonical/checksum、全部大小限制、恶意 YAML、错误脱敏与 G3-03 延期边界 [G3-02]",
+        "implemented: file:scripts/dsl/test-dsl-parser-normalization-verifier.mjs 以 28 类反向变异锁定解析器机器契约、实现、fixture、追踪和根门禁 [G3-02]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowGraphValidatorTests.java 以 Java 27 项覆盖 3 个合法拓扑、18 类非法图、500 节点最大深度、稳定失败码、脱敏、不可变结果与确定性拓扑序 [G3-03]",
+        "implemented: file:scripts/dsl/test-dsl-graph-validation-verifier.mjs 以 37 类反向变异锁定图机器契约、算法标记、fixture、追踪和根门禁 [G3-03]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowConfigurationValidatorTests.java 覆盖全部节点/触发器类型、项目优先/租户回退、跨作用域、生命周期、待轮换与 use grant [G3-04]",
+        "implemented: file:scripts/dsl/test-node-configuration-validation-verifier.mjs 以 15 类反向变异锁定配置契约、Schema、Java、fixture、文档和根门禁 [G3-04]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowExpressionCompilerTests.java 覆盖合法 CEL/JSONPath、类型、预算、禁用能力和脱敏 [G3-05]",
+        "implemented: file:scripts/dsl/test-expression-sandbox-verifier.mjs 以 19 类反向变异锁定表达式契约、实现、fixture、文档和根门禁 [G3-05]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowValidationServiceTests.java 与 WorkflowValidationControllerTests.java 覆盖 current/supplied、四阶段短路、名称漂移、节点/字段定位、500 条截断和 HTTP 边界 [G3-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 以真实 PostgreSQL 验证 WorkflowValidationService 所需的 Secret-free 资源元数据、作用域权限、撤销绑定和跨租户 RLS [G3-07]",
+        "implemented: file:scripts/definition/test-workflow-validation-api-verifier.mjs 反向锁定 validate-api.json、OpenAPI、实现、测试、追踪、文档和根门禁 [G3-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowDefinitionRobustnessTests.java 以固定种子覆盖 canonical 属性、生成式 DAG/环、冻结 DSL v1 checksum、未来版本拒绝和 CEL/JSONPath 恶意组合语料 [G3-10]",
+        "implemented: file:scripts/definition/test-workflow-robustness-suite-verifier.mjs 以反向变异锁定 G3-10 生成规模、兼容语料、攻击族、并发不变量和根门禁 [G3-10]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/definition-and-integration-migration.md 记录数据库 DSL/version 边界并明确不替代 G3 编译校验 [G2-05]",
+        "implemented: file:schemas/dsl/workflow-definition-v1.schema.json 锁定六类节点、三类触发器、重试/超时和受限表达式形状 [G2-10]",
+        "implemented: file:docs/architecture/public-contracts-and-compatibility.md 记录 DSL v1 确定性与演进边界 [G2-10]",
+        "implemented: file:docs/architecture/dsl-core-model.md 记录公共字段、fixed/linear/exponential 重试、正值时间、深层不可变和 G3-02～G3-05 职责边界 [G3-01]",
+        "implemented: file:docs/architecture/dsl-parser-normalization.md 记录 YAML 安全预检、canonical JSON、有界 plain decimal、SHA-256 和稳定失败码 [G3-02]",
+        "implemented: file:docs/architecture/dsl-graph-validation.md 记录图校验阶段、transition 矩阵、双向可达、环策略、稳定错误与复杂度 [G3-03]",
+        "implemented: file:docs/architecture/dsl-node-configuration-validation.md 记录专属 Schema、类型化结果、connector/secret 引用、作用域遮蔽、生命周期与显式授权 [G3-04]",
+        "implemented: file:docs/architecture/dsl-expression-sandbox.md 记录 CEL/JSONPath 子集、静态类型、编译/运行预算与敏感数据边界 [G3-05]",
+        "implemented: file:docs/architecture/workflow-validation-api.md 记录 current_draft/supplied_definition、四阶段短路、错误定位、revision/checksum 和资源授权快照 [G3-07]",
+        "implemented: file:docs/architecture/workflow-definition-robustness-suite.md 记录固定种子生成、DSL v1 冻结兼容、恶意语料和高竞争复现策略 [G3-10]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G3", "MVP-10"]
+    },
+    {
+      "id": "REQ-DEF-001",
+      "title": "草稿、ETag 校验、不可变发布、克隆与版本差异",
+      "source": ["OUTLINE §2.2, §4.1, §9.1", "AUDIT A-06, A-16, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-05", "G3-06", "G3-07", "G3-08", "G3-09", "G3-10", "G8-03", "G8-04", "G8-05"],
+      "api": [
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 与 WorkflowDraftController 实现 POST /api/v1/workflows、GET /api/v1/workflows/{workflowId}、PUT /api/v1/workflows/{workflowId}/draft，返回强 ETag 并要求 Idempotency-Key/If-Match [G3-06]",
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 与 WorkflowValidationService 实现 POST /api/v1/workflows/{workflowId}/validate，绑定来源、草稿 revision 与 canonical checksum [G3-07]",
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 定义 Publish 契约；WorkflowPublicationService 与 JdbcWorkflowPublicationStore 实现事务内重新校验的幂等 Publish、不可变版本、单调版本号、checksum、触发器快照、审计与 Outbox [G3-08]",
+        "implemented: file:api/openapi/workflow-platform.v1.openapi.json 与 WorkflowPortabilityController/Service、JdbcWorkflowDraftStore 实现 clone、integrity-bound import/export、显式资源映射、幂等来源审计与 bounded versions/diff [G3-09]"
+      ],
+      "events": [
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowPublicationStore.java 原子写入 workflow.version.published Outbox 与 workflow.version.publish 审计 [G3-08]",
+        "planned: WorkflowDefinitionDeactivated 审计/领域事件 [G3-08 后续状态管理任务]"
+      ],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql 创建 definition/version/trigger/connector/secret 五表、草稿 revision 与不可变发布历史 [G2-05]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V6__add_workflow_draft_api_fields.sql 追加公开 description 字段及过期幂等窗口受限重置；JdbcWorkflowDraftStore 复用 idempotency_record 并在事务内设置 RLS tenant context [G3-06]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-05-app-role-test.sql 与目录测试验证草稿可变、版本/触发器不可变、唯一性、非法引用和租户隔离 [G2-05]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 以真实 PostgreSQL 验证创建/读取/更新、幂等重放、强制 RLS、跨租户 404 和双连接同 ETag 仅一项成功 [G3-06]",
+        "implemented: file:scripts/definition/test-workflow-draft-api-verifier.mjs 反向锁定强 ETag、可信 tenant context、公开状态、412/428 与根门禁 [G3-06]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowValidationServiceTests.java 验证 Validate 四阶段短路、来源绑定、错误定位和 500 条截断 [G3-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowValidationControllerTests.java 验证 HTTP 200 校验结果、可信上下文和 Idempotency-Key 边界 [G3-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 验证 RBAC 资源快照、撤销绑定、Secret-free 查询和跨租户 RLS [G3-07]",
+        "implemented: file:scripts/definition/test-workflow-validation-api-verifier.mjs 以反向变异锁定 G3-07 机器契约和 Publish planned 边界 [G3-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPublicationServiceTests.java 验证发布事务、不可变版本、幂等与错误映射 [G3-08]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPublicationControllerTests.java 验证发布 HTTP 契约与可信上下文 [G3-08]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 验证发布并发、审计和 Outbox [G3-08]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityServiceTests.java 验证 bundle 完整性、显式映射与 bounded diff [G3-09]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityControllerTests.java 验证 portability HTTP 契约与错误映射 [G3-09]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 验证 portability 幂等审计、事务回滚与 RLS [G3-09]",
+        "implemented: file:scripts/definition/test-workflow-portability-api-verifier.mjs 以反向变异锁定 G3-09 机器契约 [G3-09]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java 以八写者同强 ETag 栅栏竞争验证仅一项成功、七项 412 语义失败、revision 只增一且失败幂等 claim 全回滚 [G3-10]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/definition-and-integration-migration.md 记录定义/版本生命周期、数据库不变量与 G3 边界 [G2-05]",
+        "implemented: file:docs/architecture/workflow-draft-api.md 记录草稿 API、ETag/If-Match、幂等事务、RLS 和已知边界 [G3-06]",
+        "implemented: file:docs/architecture/workflow-validation-api.md 记录 Validate 来源绑定、四阶段短路、精确错误和 Secret-free 资源授权 [G3-07]",
+        "implemented: file:docs/architecture/workflow-publication-api.md 记录事务锁内复验、不可变版本、幂等、审计与 Outbox [G3-08]",
+        "implemented: file:docs/architecture/workflow-portability-and-version-diff-api.md 记录 bundle 完整性、显式资源映射、原子来源审计和 bounded deterministic diff [G3-09]",
+        "implemented: file:docs/architecture/workflow-definition-robustness-suite.md 记录同 ETag 高竞争、失败事务回滚和可重复测试边界 [G3-10]",
+        "planned: 表单/JSON 编辑交互说明 [G8-03-G8-05]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G3", "MVP-10"]
+    },
+    {
+      "id": "REQ-TRIGGER-001",
+      "title": "手动与 HTTP 触发、稳定实例快照和幂等响应回放",
+      "source": ["OUTLINE §2.2, §4.2, §9.1-§10.2", "AUDIT A-05, §5.1, MVP-03"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-07", "G4-03", "G4-04"],
+      "api": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeTriggerController.java 提供 manual/HTTP trigger、Idempotency-Key、摘要与首次响应回放 [G4-03]"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTriggerStore.java 同事务写 WorkflowInstanceStarted Outbox，重复请求不重复推进 [G4-03,G4-04]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql 创建 tenant+operation+key_digest 唯一幂等记录及一次 PROCESSING→终态 guard [G2-07]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTriggerStore.java 将 idempotency claim、实例/节点冻结快照、审计与 Outbox 纳入同一事务 [G4-03,G4-04]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-07-app-role-test.sql 验证同 scope/key 唯一、响应配对、直接终态和二次改写被拒绝 [G2-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTriggerStoreIT.java 与 file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证同键回放、异摘要冲突、原子快照、RLS 和真实链路 [G4-03,G4-17]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/reliability-and-lease-migration.md 记录幂等 key/request/response 数据库边界 [G2-07]",
+        "implemented: file:docs/architecture/runtime-trigger-component.md 与 file:docs/planning/evidence/G4-03-runtime-trigger-verification.md 记录鉴权上下文、幂等、business key、trace 和事务边界 [G4-03,G4-04]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4", "MVP-03"]
+    },
+    {
+      "id": "REQ-CRON-001",
+      "title": "持久化 Cron、显式时区、misfire 与 occurrence 去重",
+      "source": ["OUTLINE §2.2, §4.2", "AUDIT A-09, §5.1, MVP-04"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G2-05", "G2-06", "G4-15"],
+      "api": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/CronSchedulingService.java 通过版本化 trigger 配置提供持久化 materialize/claim 执行入口 [G4-15]"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcCronSchedulingStore.java 将 occurrence 以稳定键接入正式实例触发/Outbox 链路 [G4-15]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql 创建 trigger_config 并约束 Cron timezone/misfire 专属字段 [G2-05]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 schedule_occurrence、trigger+scheduled_at 去重及 timezone/misfire 快照复合 FK [G2-06]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcCronSchedulingStore.java 实现时区/DST、misfire、catch-up 上限、SKIP LOCKED claim 与禁止重叠 [G4-15]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-05-app-role-test.sql 验证 Cron timezone/misfire 必填且 manual/http 禁止携带 Cron 专属字段 [G2-05]",
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证 Manual 不能创建 occurrence、Cron 快照不可漂移、状态字段和租户隔离 [G2-06]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStoreIT.java 与 file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeEngineCoreTests.java 验证 timezone/DST、SKIP/FIRE_ONCE/CATCH_UP_LIMITED、去重与禁止重叠 [G4-15]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/definition-and-integration-migration.md 记录持久化字段约束及未实现调度边界 [G2-05]",
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 occurrence 去重、Cron 快照和当前非执行边界 [G2-06]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md 与 file:docs/planning/evidence/G4-04-G4-16-execution-kernel-verification.md 记录 Cron 确定语义和证据 [G4-15]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4", "MVP-04"]
+    },
+    {
+      "id": "REQ-STATE-001",
+      "title": "持久化实例/节点/attempt 状态机、DAG 推进与安全调度",
+      "source": ["OUTLINE §2.1, §4.4, §5, §7", "AUDIT A-02-A-04, §4, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G4-01", "G4-02", "G4-05", "G4-06", "G4-16"],
+      "api": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeQueryController.java 提供实例列表/详情、节点和 attempt 四条稳定游标查询 API [G4-16]"],
+      "events": [
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTransitionStore.java 为 instance/node/attempt/schedule 生成 Secret-free v1 迁移事件并与状态同事务写 Outbox [G4-02]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 生成 workflow.task.ready 到期调度 Outbox [G4-06]"
+      ],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 workflow_instance、node_instance、task_execution、schedule_occurrence 及数据库状态/时间不变量 [G2-06]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTransitionStore.java 以 tenant/id/status/version 条件更新四类实体、version 原子加一，并同事务写 audit_log/outbox_event [G4-02]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 实现条件分支 DAG 推进、实例收敛和三类到期状态 SKIP LOCKED 调度 [G4-05,G4-06]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证状态字段、时间顺序、租约、摘要、Cron 快照、Task 单次终态与 RLS 数据库不变量 [G2-06]",
+        "implemented: file:scripts/runtime/test-state-machine-verifier.mjs 以 20 类反向变异锁定实例/节点/attempt/occurrence 迁移、终态、字段副作用、乐观锁协议、ADR、迁移源和根门禁 [G4-01]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeStateTransitionServiceTests.java 与 file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTransitionStoreIT.java 覆盖 45 条 allow-list、actor/effect、四实体、独立计数增长、同版本双 writer、fencing、跨租户和 audit/Outbox 故障全回滚 [G4-02]",
+        "implemented: file:scripts/runtime/test-state-transition-component-verifier.mjs 以反向变异锁定 G4-02 生产入口、事务、测试、文档、追踪和根门禁 [G4-02]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeEngineCoreTests.java 验证 DAG、条件分支、Cron 和游标核心语义 [G4-05,G4-15,G4-16]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStoreIT.java 验证 PostgreSQL 并发调度、Cron occurrence 和查询 [G4-05,G4-06,G4-15,G4-16]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证控制面重建后的状态恢复 [G4-17]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录已落库状态集合、字段一致性和未实现运行能力边界 [G2-06]",
+        "implemented: file:docs/adr/ADR-003-runtime-instance-node-attempt-state-machines.md 与 file:config/runtime/state-machine.json 锁定实例/节点/attempt/occurrence 全部允许迁移、expected status/version、终态、fencing 和事务 Outbox 边界 [G4-01]",
+        "implemented: file:docs/architecture/runtime-state-machines.md 提供 ADR-003 状态关系和后续 G4 责任边界 [G4-01]",
+        "implemented: file:docs/architecture/runtime-state-transition-component.md 记录 G4-02 统一入口、乐观锁、RLS、确定失败、fencing 和同事务审计/Outbox [G4-02]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md 与 file:docs/planning/evidence/G4-04-G4-16-execution-kernel-verification.md 记录 keyset cursor、RLS 和 payload 引用边界 [G4-16]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4", "MVP-04"]
+    },
+    {
+      "id": "REQ-NODE-START-001",
+      "title": "Start 与 End 基础节点",
+      "source": ["OUTLINE §4.1, §4.3", "AUDIT §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G4-11"],
+      "api": ["not-applicable: 节点由 DSL 定义并通过实例触发 API 执行"],
+      "events": ["implemented: file:worker/src/main/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutor.java 与正式 task.ready/result 状态链路推进 Start/End [G4-11]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 提供 node_instance/task_execution 的节点类型、状态与 attempt 持久化基础 [G2-06]",
+        "implemented: file:worker/src/main/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutor.java 与 file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 实现 Start/End 和全部选中节点成功后的实例收敛 [G4-11]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证节点类型/状态和 task attempt 基础约束 [G2-06]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutorTests.java 验证 Start/End 执行结果 [G4-11]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeEngineCoreTests.java 验证选中节点完成后的实例收敛 [G4-11]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证真实 Start/End 链路 [G4-17]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录通用节点运行态持久化边界 [G2-06]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md 记录 Start/End 节点和收敛语义 [G4-11]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4"]
+    },
+    {
+      "id": "REQ-NODE-CONDITION-001",
+      "title": "安全 Condition 节点与确定性布尔分支",
+      "source": ["OUTLINE §2.1, §4.3, §19", "AUDIT A-07, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G4-12"],
+      "api": ["not-applicable: Condition 配置由 DSL/Validate API 管理"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 只推进首个命中条件边，未选分支为 CANCELLED，事件不包含敏感输入 [G4-12]"],
+      "tables": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTriggerStore.java 冻结输入/config，运行时分支结果落入 node/attempt 状态链路 [G4-12]"],
+      "tests": [
+        "implemented: file:shared-contracts/src/test/java/com/workflowplatform/contracts/expression/DeterministicConditionEvaluatorTests.java 验证布尔/数值/字符串/null/优先级、token/depth 和恶意表达式 [G4-12]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeEngineCoreTests.java 验证首个条件命中、fallback 和未选分支取消 [G4-12]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证真实 Condition 分支链路 [G4-17]"
+      ],
+      "docs": ["implemented: file:docs/architecture/runtime-execution-kernel.md 与 file:docs/planning/evidence/G4-04-G4-16-execution-kernel-verification.md 记录确定性 Condition 子集和资源限制 [G4-12]"],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4"]
+    },
+    {
+      "id": "REQ-NODE-HTTP-001",
+      "title": "HTTP 节点插件、受管 endpoint、模板映射与结果提取",
+      "source": ["OUTLINE §2.2, §4.3, §10.3, §12", "AUDIT A-07, A-08, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-05", "G2-06", "G4-10", "G4-13"],
+      "api": ["not-applicable: HTTP 节点通过版本化 DSL 与受管 connector 配置"],
+      "events": ["implemented: file:worker/src/main/java/com/workflowplatform/worker/WorkerExecutionService.java 与 file:worker/src/main/java/com/workflowplatform/worker/ManagedHttpWorkerNodeExecutor.java 消费 task.ready 并产生统一成功/可重试/不可重试结果 [G4-10,G4-13]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 与 V2 connector 共同提供 node/task execution_id、输入输出摘要和错误类别持久化基础 [G2-05,G2-06]",
+        "implemented: file:worker/src/main/java/com/workflowplatform/worker/ManagedHttpWorkerNodeExecutor.java 实现冻结受管 endpoint、逐跳 DNS/IP SSRF 防护、Header/Body 映射、结果提取、响应上限与状态分类 [G4-13]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证 execution_id/attempt 唯一性、摘要格式、输出配对和错误字段状态约束 [G2-06]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/WorkerExecutionServiceTests.java 验证 SPI、超时、异常脱敏和 completion 边界 [G4-10]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/ManagedHttpWorkerNodeExecutorTests.java 验证 SSRF、映射/提取、响应限制和错误分类 [G4-13]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证受管 HTTP 真实执行链路 [G4-17]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 task 输入输出引用/摘要和错误字段的数据库边界 [G2-06]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md 与 file:docs/planning/evidence/G4-04-G4-16-execution-kernel-verification.md 记录节点执行、HTTP 映射和安全边界 [G4-10,G4-13]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4", "MVP-06"]
+    },
+    {
+      "id": "REQ-NODE-DELAY-001",
+      "title": "不依赖进程内定时器的持久化 Delay 节点",
+      "source": ["OUTLINE §2.2, §4.3, §14.2", "AUDIT A-03, §5.1, MVP-04"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G4-14"],
+      "api": ["not-applicable: Delay 由 DSL 配置，通过实例查询 API 观察"],
+      "events": ["implemented: file:worker/src/main/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutor.java 与调度状态链路产生 WAITING_TIMER/到期 task.ready，重复唤醒受状态和租约保护 [G4-14]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 WAITING_TIMER/next_schedule_at 状态一致性约束与租户优先到期索引 [G2-06]",
+        "implemented: file:worker/src/main/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutor.java 与 file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 实现 ISO-8601 duration、持久化 next_schedule_at 与恢复扫描 [G4-14]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证可调度状态必须携带 next_schedule_at 且其他状态禁止残留 [G2-06]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/BuiltinWorkerNodeExecutorTests.java 验证 duration 与恢复 attempt [G4-14]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStoreIT.java 验证 WAITING_TIMER 到期扫描 [G4-14]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证销毁/重建控制面后的 Delay 恢复 [G4-17]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 WAITING_TIMER 与到期索引数据库语义 [G2-06]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md 与 file:docs/planning/evidence/G4-17-runtime-happy-path-e2e.md 记录持久化 Delay 和重启恢复语义 [G4-14,G4-17]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G4", "MVP-04"]
+    },
+    {
+      "id": "REQ-OUTBOX-001",
+      "title": "事务 Outbox、Kafka 派发与消费者去重",
+      "source": ["OUTLINE §5.3, §9.3, §10.1-§10.2", "AUDIT A-02, A-17, §4.3, MVP-03"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-07", "G4-07", "G4-08", "G5-07"],
+      "api": ["not-applicable: 可靠消息是状态迁移与 Worker 协作的内部契约"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/KafkaOutboxEventSink.java 与 Worker Kafka consumer 传递版本化 instance/task.ready 事件；Worker 以数据库 claim 和 processed_event 作为至少一次投递下的事实边界 [G4-07,G4-08,G5-07]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql 创建 outbox_event/processed_event、consumer+event 唯一、发布租约与单向 lifecycle guard [G2-07]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-07-app-role-test.sql 验证 Outbox 领取/确认、发布后不可改写、消费去重、append-only 与 RLS [G2-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcOutboxPublicationStoreIT.java 验证提交后发布、失败退避和租约恢复 [G4-07]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/testsupport/KafkaTaskDeliveryIT.java 验证真实 Kafka 重复消费和重启重试 [G4-08]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 验证 Outbox/Kafka/Worker 快乐路径 [G4-17]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStoreIT.java 验证节点结果、attempt、lease、审计、Outbox 与 processed_event 同事务提交，重复 consumer+event 不会产生第二次业务结果 [G5-07]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 在真实 PostgreSQL/Kafka 验证 task.ready 消费与 processed_event 持久去重 [G5-07]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/reliability-and-lease-migration.md 记录 Outbox/去重数据库不变量、至少一次边界与未实现运行能力 [G2-07]",
+        "implemented: file:docs/architecture/runtime-execution-kernel.md; file:docs/adr/ADR-004-retry-lease-recovery-dead-letter-replay.md 与 file:docs/planning/evidence/G5-01-G5-08-reliability-verification.md 记录至少一次投递、事务去重和回滚不留去重记录的边界 [G4-07,G4-08,G5-07]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G5", "MVP-03"]
+    },
+    {
+      "id": "REQ-LEASE-001",
+      "title": "数据库租约、心跳、lease generation 与 fencing",
+      "source": ["OUTLINE §5.2, §7.3, §19", "AUDIT A-02, A-04, §4.3, MVP-02"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G2-07", "G4-09", "G5-02", "G5-03", "G5-06"],
+      "api": ["implemented: file:worker/src/main/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStore.java 提供 claim/heartbeat/result 条件更新，只接受当前 worker_id、lease_generation 且未过期的 fencing token [G4-09,G5-03]"],
+      "events": ["implemented: file:worker/src/main/java/com/workflowplatform/worker/internal/KafkaTaskReadyConsumer.java 将 TaskReady 视为提示，必须成功领取数据库租约后执行 [G4-09]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 node_instance worker_id/lease_expire_at/dispatch_count/attempt_no/lease_generation 及租约状态一致性约束 [G2-06]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql 创建 worker_lease、一个 ACTIVE lease partial unique、心跳单调与 node 当前 token fencing guard [G2-07]",
+        "implemented: file:worker/src/main/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStore.java 实现 claim/heartbeat/result generation/worker/expiry 条件更新； file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java 到期扫描后终结旧 attempt/lease 并回到 READY 等待新 generation [G4-09,G5-03,G5-06]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证 DISPATCHED/RUNNING 必须携带成对且未过期的 worker/lease 字段 [G2-06]",
+        "implemented: file:tests/database/g2-07-app-role-test.sql 验证当前 generation/worker/expiry、心跳延长、终态不可改写和旧 token 拒绝 [G2-07]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStoreIT.java 验证当前/旧 generation、worker 与 expiry fencing； file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStoreIT.java 验证过期扫描、ABANDONED/EXPIRED 与 generation 递增 [G5-03,G5-06]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 在真实 PostgreSQL/Kafka 中关闭已 claim 的 Worker，上报迟到结果被拒绝，新 Worker 以 generation 2/attempt 2 成功并收敛为 2:2:2 [G5-03,G5-06]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录节点租约字段与 tenant-leading expiry index 数据库边界 [G2-06]",
+        "implemented: file:docs/architecture/reliability-and-lease-migration.md 记录 Worker lease audit、fencing guard、心跳顺序和实现边界 [G2-07]",
+        "implemented: file:docs/adr/ADR-004-retry-lease-recovery-dead-letter-replay.md 与 file:docs/planning/evidence/G5-01-G5-08-reliability-verification.md 固化 dispatch_count、attempt_no、lease_generation 的独立增长时点和恢复/fencing 协议 [G5-01,G5-02,G5-03,G5-06]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G5", "MVP-02"]
+    },
+    {
+      "id": "REQ-RETRY-001",
+      "title": "错误分类、退避重试、死信与不可改写重放",
+      "source": ["OUTLINE §2.1-§2.2, §4.4, §10.3", "AUDIT §4.2-§4.3, §5.1"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G2-07", "G5-01", "G5-04", "G5-05", "G5-08", "G5-09"],
+      "api": [
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeControlController.java 提供 POST /api/v1/instances/{instanceId}/replay，支持失败节点或新实例模式、强制原因和幂等 [G5-09]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/DeadLetterDispositionController.java 提供 POST /api/v1/dead-letters/{deadLetterId}/notes 与 /redispatch，要求 Idempotency-Key、可信租户上下文、受限正文和 trace [G5-08]"
+      ],
+      "events": [
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeControlStore.java 写入 replay accepted 与失败节点 workflow.task.ready 版本化 Outbox Envelope [G5-09]",
+        "implemented: file:worker/src/main/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStore.java 事务写入 workflow.runtime.node.retry.scheduled/terminal 结果事件； file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcDeadLetterDispositionStore.java 写入 note.added/redispatched 版本化 Outbox Envelope [G5-04,G5-08]"
+      ],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 task_execution attempt 历史、RETRY_WAIT/next_schedule_at 和终态不可改写保护 [G2-06]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql 创建 dead_letter、attempt-node 三元绑定、脱敏 Payload 与一次 OPEN→处置 guard [G2-07]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeControlStore.java 在不修改源 attempt 的前提下创建 replay 实例/节点快照 [G5-09]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcDeadLetterDispositionStore.java 在同一事务锁定 OPEN 死信、写脱敏备注审计/摘要 Outbox 或处置为 REQUEUED 并创建失败节点 replay，新目标与源历史隔离 [G5-08]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-catalog-test.sql 验证应用/平台管理员/表 owner 均不能二次改写或删除终态 task history [G2-06]",
+        "implemented: file:tests/database/g2-07-app-role-test.sql 验证 attempt/node 错配、非法直接处置和终态死信改写被拒绝 [G2-07]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeControlStoreIT.java 验证两种 replay、源 attempt 快照不变、跨租户 404、脱敏备注、24 小时幂等、RLS、审计/Outbox 与死信再次派发事务 [G5-08,G5-09]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/internal/WorkerRetryPlannerTests.java 与 file:worker/src/test/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStoreIT.java 验证错误分类、三种退避、稳定 jitter、最大次数/窗口、Retry-After、终态死信与脱敏 [G5-04,G5-05,G5-08]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/WorkerExecutionServiceTests.java 验证外部结果查询确认成功可阻止重复重试，查询失败/不确定时安全回退 [G5-05]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 attempt 单次 RUNNING→终态收口与不可改写边界 [G2-06]",
+        "implemented: file:docs/architecture/reliability-and-lease-migration.md 记录业务死信、三元来源绑定、单向处置与 Kafka DLQ 分界 [G2-07]",
+        "implemented: file:docs/adr/ADR-004-retry-lease-recovery-dead-letter-replay.md 与 file:docs/planning/evidence/G5-01-G5-08-reliability-verification.md 记录错误映射、退避公式/上限、外部结果查询、死信处置和不可改写重放语义 [G5-01,G5-04,G5-05,G5-08]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G5"]
+    },
+    {
+      "id": "REQ-CONTROL-001",
+      "title": "实例暂停、恢复与协作式取消",
+      "source": ["OUTLINE §4.4, §9.1", "AUDIT A-03, §4.1-§4.2, §5.1"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G2-06", "G5-10", "G5-11"],
+      "api": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeControlController.java 提供 pause/resume/cancel，强制原因、Idempotency-Key 和 202 首次响应回放 [G5-10,G5-11]"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeTransitionPolicy.java 将 PauseRequested/Paused/Resumed/CancelRequested/Cancelled 映射为事务 Outbox 状态迁移事件 [G5-10,G5-11]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 PAUSE_REQUESTED/PAUSED/CANCEL_REQUESTED/CANCELLED 状态、时间一致性和 version 基础 [G2-06]",
+        "implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeControlStore.java 将控制原因码、审计、Outbox、状态和幂等结果置于同一事务 [G5-10,G5-11]"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证实例非终态/终态时间字段一致性和乐观版本非负基础 [G2-06]",
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeControlStoreIT.java 验证已运行节点安全点、WAITING_TIMER 保留、PAUSED 阻断派发、重复请求、协作取消和跨租户边界 [G5-10,G5-11]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录控制状态数据库基础 [G2-06]",
+        "implemented: file:docs/planning/evidence/G5-09-G5-11-runtime-control-verification.md 记录暂停/恢复/取消迁移、验证证据及无法强制撤销外部副作用的限制 [G5-10,G5-11]"
+      ],
+      "implementationStatus": "implemented",
+      "acceptanceGates": ["G5"]
+    },
+    {
+      "id": "REQ-PAYLOAD-001",
+      "title": "大 Payload 对象存储、摘要与数据保留",
+      "source": ["OUTLINE §2.4, §8.2, §19", "AUDIT A-14"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G2-06", "G5-12"],
+      "api": ["planned: 输入/输出查询返回内联值或受权对象引用与摘要 [G5-12]"],
+      "events": ["planned: 事件只携带受限 Payload 或对象引用/摘要，不携带大文件 [G5-12]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 workflow/task 输入输出 ref 与 64 位 SHA-256 digest 配对约束 [G2-06]",
+        "planned: G5-12 增加 payload size、对象存储授权、阈值与分层保留流程"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证空白引用、摘要格式和输出 ref/digest 配对 [G2-06]",
+        "planned: 阈值边界、摘要篡改、越权引用、对象缺失、归档与清理测试 [G5-12]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录数据库仅保存受控引用/摘要且未实现对象存储能力 [G2-06]",
+        "planned: Payload 阈值、MinIO/S3 引用、保留/归档/删除与隐私策略 [G5-12]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G5", "MVP-07"]
+    },
+    {
+      "id": "REQ-HUMAN-001",
+      "title": "持久化人工待办、首次有效决策、转交、超时与审计",
+      "source": ["OUTLINE §2.2, §3, §4.3, §9.1", "AUDIT A-03, §5.1, MVP-04"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-06", "G2-08", "G7-01", "G7-02", "G7-03", "G7-04", "G7-05", "G7-06", "G7-07", "G7-08", "G8-08"],
+      "api": ["planned: GET /tasks/inbox 与 POST /tasks/{id}/decisions（approve/reject/transfer）[G7-03-G7-05]"],
+      "events": ["planned: workflow.human.created/decided/timed-out，决策仅首次状态+version 更新有效 [G7-02,G7-04]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 node_instance WAITING_APPROVAL 持久状态基础 [G2-06]",
+        "implemented: file:control-plane/src/main/resources/db/migration/V5__create_human_audit_and_quota.sql 创建 human_task/audit_log、候选人/截止时间/转交证据与首次终态 guard [G2-08]",
+        "planned: G7 实现人工任务 application service、鉴权与运行时联动"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-06-app-role-test.sql 验证节点状态集合与非调度/非租约字段一致性基础 [G2-06]",
+        "implemented: file:tests/database/g2-08-app-role-test.sql 验证用户/角色索引基础、单次转交/决策/超时、跨租户与审计不可改写 [G2-08]",
+        "planned: 用户/角色过滤、并发决策、转交权限、超时策略、重启恢复、敏感表单脱敏及退款 E2E [G7-03-G7-08]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录 WAITING_APPROVAL 仅为运行态占位且未声称人工任务能力完成 [G2-06]",
+        "implemented: file:docs/architecture/human-audit-quota-migration.md 记录 Human Task Schema、状态/候选人/转交/超时/审计数据库语义 [G2-08]",
+        "planned: Human Task Schema、状态/候选人/转交/超时/审计语义 [G7-01,G7-07]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G7", "MVP-01", "MVP-04"]
+    },
+    {
+      "id": "REQ-GOV-001",
+      "title": "请求保护、租户配额、限流、Worker 背压与供应链安全",
+      "source": ["OUTLINE §10.4, §12, §15.3", "AUDIT A-10-A-12, §5.1"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G2-08", "G6-09", "G6-11"],
+      "api": ["planned: 请求大小/超时/并发限制、租户配额用量与限流错误响应 [G6-09]"],
+      "events": ["planned: QuotaThresholdReached/BackpressureActivated 低基数治理事件 [G6-09]"],
+      "tables": [
+        "implemented: file:control-plane/src/main/resources/db/migration/V5__create_human_audit_and_quota.sql 创建 quota_usage、tenant/resource/window 唯一性、非重叠窗口 guard 与强制 RLS [G2-08]",
+        "planned: G6-09 创建按租户/连接器的限制配置与运行策略"
+      ],
+      "tests": [
+        "implemented: file:tests/database/g2-08-app-role-test.sql 验证用量单调递增、limit/window 快照不可改、相邻窗口与重叠窗口拒绝 [G2-08]",
+        "planned: 限流、真实并发竞争、队列上限、Redis 降级、依赖/Secret/镜像扫描和 SBOM 门禁 [G6-09,G6-11]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/human-audit-quota-migration.md 记录配额窗口数据库不变量与非能力边界 [G2-08]",
+        "planned: 配额/限流/背压策略、SBOM 和依赖漏洞响应流程 [G6-09,G6-11]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G6"]
+    },
+    {
+      "id": "REQ-WEB-001",
+      "title": "可用且可访问的管理端运行与运维体验",
+      "source": ["OUTLINE §3, §4, §17", "AUDIT A-16, §5.1"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G8-01", "G8-06", "G8-07", "G8-09", "G8-11"],
+      "api": ["planned: 类型安全 API Client 对接实例列表/详情/attempt/控制/死信/重放 API [G8-01,G8-06-G8-09]"],
+      "events": ["not-applicable: MVP Web Console 通过 API 读取权威状态，不引入浏览器侧事实源"],
+      "tables": ["not-applicable: Web Console 不直接访问数据库"],
+      "tests": ["planned: 登录权限守卫、空态/加载/错误、未授权操作、可访问性、响应式与 Playwright 关键路径 [G8-01,G8-11]"],
+      "docs": ["planned: 页面信息架构、权限可见性、错误处理与关键操作确认规范 [G8-01,G8-09]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G8"]
+    },
+    {
+      "id": "REQ-OBS-001",
+      "title": "低基数指标、结构化日志、Trace、告警、探针与 Runbook",
+      "source": ["OUTLINE §2.1, §13, §18", "AUDIT A-10, §5.1, MVP-07"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G9-01", "G9-02", "G9-03", "G9-04", "G9-05", "G9-06", "G9-07", "G9-08", "G9-09"],
+      "api": ["planned: liveness/readiness/startup、受权运行明细与 Trace 链接 API [G9-04,G9-07]"],
+      "events": ["planned: W3C Trace Context 经 Kafka Header 传播，告警基于低基数聚合 [G9-01,G9-03]"],
+      "tables": ["not-applicable: 遥测后端独立；核心 PostgreSQL 仅保存业务查询所需 trace/correlation id"],
+      "tests": ["planned: Trace 跨 HTTP/Kafka、日志注入/脱敏、指标标签基数、告警规则、探针降级与优雅停机测试 [G9-01-G9-08]"],
+      "docs": ["planned: Dashboard、告警和积压/死信/数据库/Kafka/租约风暴/密钥轮换 Runbook [G9-05,G9-06,G9-09]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G9", "MVP-07", "MVP-10"]
+    },
+    {
+      "id": "REQ-TEST-001",
+      "title": "数据库、单元、集成、属性与并发正确性测试基线",
+      "source": ["OUTLINE §14.1-§14.2", "AUDIT §5.1, §6"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G2-11", "G10-01", "G10-02", "G10-03"],
+      "api": ["not-applicable: 本项验证公开 API 与内部组件，不新增业务 API"],
+      "events": ["planned: Kafka 生产/消费契约、重复/乱序与事务边界集成测试 [G10-02,G10-03]"],
+      "tables": [
+        "implemented: file:control-plane/src/test/java/com/workflowplatform/controlplane/database/DatabaseMigrationIT.java 使用 Testcontainers 验证空库/重复迁移、约束、RLS 和查询计划 [G2-11]",
+        "planned: G10-02 验证锁竞争、并发领取和真实基础设施事务边界"
+      ],
+      "tests": [
+        "implemented: file:scripts/database/verify-testcontainers-database.mjs 锁定 PostgreSQL/Flyway/Catalog/fixture/查询计划测试契约 [G2-11]",
+        "planned: DSL、状态机、重试、签名、脱敏、权限、表达式、属性测试与并发竞争测试 [G10-01-G10-03]"
+      ],
+      "docs": [
+        "implemented: file:docs/architecture/testcontainers-database-verification.md 记录真实 PostgreSQL 边界、测试数据、默认优化器规则和兼容风险 [G2-11]",
+        "planned: 测试分层、覆盖目标与完整测试数据工厂说明 [G10-01,G10-02]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G2", "G10"]
+    },
+    {
+      "id": "REQ-E2E-001",
+      "title": "三条演示流程与重复、崩溃、依赖故障的端到端验证",
+      "source": ["OUTLINE §3.1, §14.3-§14.4", "AUDIT §6, MVP-01-MVP-04"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G4-17", "G5-13", "G10-04", "G10-05"],
+      "api": [
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 使用真实触发/查询服务 [G4-17]",
+        "planned: 审批/控制 API 和另外两条演示流 [G10-04]"
+      ],
+      "events": [
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 通过真实 Kafka 与 processed-event 验证重复不重复推进 [G4-17]",
+        "planned: 积压、Worker kill 和依赖故障注入 [G5-13,G10-05]"
+      ],
+      "tables": [
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 对 workflow/node/task/outbox/processed 状态作真实 PostgreSQL 断言 [G4-17]",
+        "planned: dead-letter/human 全场景状态断言 [G10-04,G10-05]"
+      ],
+      "tests": [
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 跑通 HTTP→Condition→HTTP→Delay→控制面重建→End [G4-17]",
+        "planned: 订单/退款/告警和系统化故障注入 [G10-04,G10-05]"
+      ],
+      "docs": [
+        "implemented: file:docs/planning/evidence/G4-17-runtime-happy-path-e2e.md 记录真实基础设施、步骤、不变量和限制 [G4-17]",
+        "planned: G5/G10 三场景与故障证据 [G5-13,G10-04,G10-05]"
+      ],
+      "implementationStatus": "partial",
+      "acceptanceGates": ["G10", "MVP-01", "MVP-02", "MVP-03", "MVP-04"]
+    },
+    {
+      "id": "REQ-SEC-TEST-001",
+      "title": "越权、SSRF、表达式与 Payload 安全回归",
+      "source": ["OUTLINE §12, §14", "AUDIT A-07, A-08, A-13, MVP-05-MVP-07"],
+      "scope": "mvp",
+      "priority": "P0",
+      "controlTasks": ["G10-06"],
+      "api": ["planned: 对全部对象级访问、重放、密钥与高风险控制 API 执行鉴权负向测试 [G10-06]"],
+      "events": ["planned: 验证跨租户/恶意事件不能推进状态，错误事件不泄漏敏感 Payload [G10-06]"],
+      "tables": ["planned: 验证 RLS、tenant 过滤、审计追加和对象引用隔离 [G10-06]"],
+      "tests": ["planned: IDOR/越权、SSRF/重定向、恶意表达式、Payload 炸弹、日志/Trace/错误脱敏测试 [G10-06]"],
+      "docs": ["planned: 安全回归矩阵、测试 Payload、预期拒绝码与证据 [G10-06]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G10", "MVP-05", "MVP-06", "MVP-07"]
+    },
+    {
+      "id": "REQ-PERF-001",
+      "title": "可复现的容量场景、30 分钟压测与真实分位数报告",
+      "source": ["OUTLINE §5.1, §14.5", "AUDIT A-12, §6, MVP-08"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G10-07", "G10-08", "G10-09", "G10-10"],
+      "api": ["planned: k6 覆盖触发 API、短任务、延迟任务和高失败率任务 [G10-08]"],
+      "events": ["planned: 记录 Kafka 生产/消费率、积压和调度派发延迟 [G10-09]"],
+      "tables": ["planned: 固定数据规模并记录 PostgreSQL TPS、锁等待、表/索引规模与查询计划 [G10-07,G10-09]"],
+      "tests": ["planned: 固定硬件/Payload/下游延迟/并发，持续 30 分钟加峰值，优化后同口径复测 [G10-07-G10-10]"],
+      "docs": ["planned: 含环境、数据、脚本、时长、P50/P95/P99、错误率、资源和瓶颈的报告 [G10-09,G10-10]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G10", "MVP-08"]
+    },
+    {
+      "id": "REQ-RECOVERY-001",
+      "title": "前向迁移、备份恢复、版本升级与安全发布",
+      "source": ["OUTLINE §15.3, §18", "AUDIT A-14, MVP-09"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G10-11", "G11-06", "G11-07"],
+      "api": ["not-applicable: 数据恢复和发布通过受控运维流程执行，不暴露普通业务 API"],
+      "events": ["planned: 发布/迁移/恢复审计事件与失败停止条件 [G11-06]"],
+      "tables": ["planned: Flyway 前向兼容迁移、备份范围与恢复校验 [G10-11,G11-06]"],
+      "tests": ["planned: 前一版本升级、备份恢复、失败迁移、回滚/前滚和 RPO/RTO 演练 [G10-11]"],
+      "docs": ["planned: 迁移 Job、兼容窗口、灰度/失败停止、备份恢复和数据保留手册 [G11-06,G11-07]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G10", "G11", "MVP-09"]
+    },
+    {
+      "id": "REQ-DELIVERY-001",
+      "title": "一键本地环境、Kubernetes 交付与不可变供应链",
+      "source": ["OUTLINE §15, §17-§18", "AUDIT §3, §6"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G11-01", "G11-04", "G11-05"],
+      "api": ["planned: 一键初始化通过公开 API 导入演示租户、账号和三条示例流程 [G11-01]"],
+      "events": ["not-applicable: 部署契约不新增业务事件；演示数据使用正式事件链路"],
+      "tables": ["planned: 可重复种子数据与迁移，禁止初始化脚本绕过领域约束 [G11-01]"],
+      "tests": ["planned: 干净环境 Compose/Helm smoke、资源限制/PDB/HPA/网络策略与镜像签名验证 [G11-01,G11-04,G11-05]"],
+      "docs": ["planned: 本地快速开始、Helm/Kustomize、生产拓扑、镜像 SBOM/签名和 Git SHA Tag 说明 [G11-01,G11-04,G11-05]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G11", "MVP-01"]
+    },
+    {
+      "id": "REQ-RELEASE-001",
+      "title": "演示材料、发布说明与十项 MVP 最终验收",
+      "source": ["OUTLINE §16, §18, §20", "AUDIT §6-§7"],
+      "scope": "mvp",
+      "priority": "P1",
+      "controlTasks": ["G11-08", "G11-09", "G11-10"],
+      "api": ["not-applicable: 发布验收消费既有 API，不新增未经追踪的接口"],
+      "events": ["not-applicable: 发布验收消费既有事件，不新增未经追踪的 Topic"],
+      "tables": ["not-applicable: 发布验收消费既有 Schema，不直接修改生产数据"],
+      "tests": ["planned: 从干净环境执行十项 MVP Gate、演示脚本与发布候选回归 [G11-10]"],
+      "docs": ["planned: 演示脚本/视频、版本发布说明、已知限制和仅基于实测的量化成果 [G11-08,G11-09]"],
+      "implementationStatus": "planned",
+      "acceptanceGates": ["G11", "MVP-01", "MVP-10"]
+    },
+    {
+      "id": "REQ-P2-TRIGGERS-001",
+      "title": "二期消息入站与完整 Webhook 治理",
+      "source": ["OUTLINE §2.1, §2.3, §4.2", "AUDIT §5.2"],
+      "scope": "phase2",
+      "priority": "P2",
+      "controlTasks": ["G12-01", "G12-02"],
+      "api": ["planned: Webhook 管理、签名配置、消费位点与消息触发器 API [G12-01,G12-02]"],
+      "events": ["planned: Kafka/RocketMQ 入站触发与 Webhook receipt 去重事件 [G12-01,G12-02]"],
+      "tables": ["planned: inbound_subscription, consumer_checkpoint, webhook_nonce/receipt [G12-01,G12-02]"],
+      "tests": ["planned: 位点恢复、重复消息、HMAC/nonce/时间窗/IP 策略和重放攻击测试 [G12-01,G12-02]"],
+      "docs": ["planned: 二期消息/Webhook 契约与安全运维说明 [G12-01,G12-02]"],
+      "implementationStatus": "phase2",
+      "acceptanceGates": ["G12"]
+    },
+    {
+      "id": "REQ-P2-NODES-001",
+      "title": "二期并行、子流程、补偿、回调、消息与连接器市场",
+      "source": ["OUTLINE §2.1, §2.3, §4.3", "AUDIT §5.2"],
+      "scope": "phase2",
+      "priority": "P2",
+      "controlTasks": ["G12-03", "G12-04", "G12-05", "G12-06"],
+      "api": ["planned: 子流程/补偿操作、回调注册与连接器插件管理 API [G12-04-G12-06]"],
+      "events": ["planned: BranchForked/Joined, SubflowStarted/Completed, Compensation*, Callback/MessageSent [G12-03-G12-06]"],
+      "tables": ["planned: branch_join, subflow_link, compensation_stack, callback_subscription, connector_plugin [G12-03-G12-06]"],
+      "tests": ["planned: all/any 汇聚、版本固定、递归防护、补偿失败和回调/消息幂等测试 [G12-03-G12-06]"],
+      "docs": ["planned: 二期节点 Schema、状态机、失败恢复和插件安全边界 [G12-03-G12-06]"],
+      "implementationStatus": "phase2",
+      "acceptanceGates": ["G12"]
+    },
+    {
+      "id": "REQ-P2-PRODUCT-001",
+      "title": "二期 SLA、通知、报表、精细配额与拖拽画布",
+      "source": ["OUTLINE §2.3, §3, §13", "AUDIT A-16, §5.2"],
+      "scope": "phase2",
+      "priority": "P2",
+      "controlTasks": ["G12-07", "G12-08"],
+      "api": ["planned: SLA/通知渠道/报表/精细配额与画布元数据 API [G12-07,G12-08]"],
+      "events": ["planned: SlaBreached/NotificationRequested/Delivered 与报表投影事件 [G12-07]"],
+      "tables": ["planned: sla_policy, notification_delivery, reporting_projection, quota_policy 与 layout metadata [G12-07,G12-08]"],
+      "tests": ["planned: SLA 时钟、通知去重/重试、报表一致性、配额边界和画布可访问性测试 [G12-07,G12-08]"],
+      "docs": ["planned: 二期通知/SLA/报表产品语义与画布交互规范 [G12-07,G12-08]"],
+      "implementationStatus": "phase2",
+      "acceptanceGates": ["G12"]
+    },
+    {
+      "id": "REQ-P2-AI-001",
+      "title": "二期受约束 AI 流程草稿与脱敏失败总结",
+      "source": ["OUTLINE §2.1, §2.3, §11", "AUDIT A-15, §5.2"],
+      "scope": "phase2",
+      "priority": "P2",
+      "controlTasks": ["G12-09", "G12-10"],
+      "api": ["planned: AI draft/summary API，仅返回建议且必须人工确认 [G12-09,G12-10]"],
+      "events": ["planned: AiSuggestionGenerated/Accepted/Rejected 审计事件，不触发自动发布或运维操作 [G12-09,G12-10]"],
+      "tables": ["planned: ai_usage_budget, ai_evaluation_result, ai_suggestion_audit（脱敏）[G12-09,G12-10]"],
+      "tests": ["planned: Schema 约束、Prompt 注入/越权、预算、评测集、人工采纳率和敏感数据泄漏测试 [G12-09,G12-10]"],
+      "docs": ["planned: 模型 Provider、风险扫描、预算、评测、安全边界与人工发布流程 [G12-09,G12-10]"],
+      "implementationStatus": "phase2",
+      "acceptanceGates": ["G12"]
+    },
+    {
+      "id": "REQ-P2-SCALE-001",
+      "title": "二期仅按实测容量或团队边界拆分微服务",
+      "source": ["OUTLINE §6, §15.2", "AUDIT A-01, §3.1, §5.2"],
+      "scope": "phase2",
+      "priority": "P2",
+      "controlTasks": ["G12-11"],
+      "api": ["planned: 拆分前冻结并兼容现有 OpenAPI/内部服务契约 [G12-11]"],
+      "events": ["planned: 拆分后沿用版本化 Event Envelope 与消费者兼容规则 [G12-11]"],
+      "tables": ["planned: 只有在事务边界经 ADR 证明后才拆分数据所有权 [G12-11]"],
+      "tests": ["planned: 容量证据、契约兼容、滚动升级和跨服务故障测试 [G12-11]"],
+      "docs": ["planned: 拆分决策 ADR、容量/组织证据、迁移与回退计划 [G12-11]"],
+      "implementationStatus": "phase2",
+      "acceptanceGates": ["G12"]
+    },
+    {
+      "id": "REQ-OOS-SCOPE-001",
+      "title": "明确排除完整 BPMN、任意脚本、Redis 核心状态、exactly-once 与 AI 自动高风险操作",
+      "source": ["OUTLINE §2.4, §11.3", "AUDIT §5.3"],
+      "scope": "out-of-scope",
+      "priority": "P0",
+      "controlTasks": [],
+      "api": ["out-of-scope: 不提供任意脚本执行、AI 自动发布/重放/高风险执行 API"],
+      "events": ["out-of-scope: 不承诺外部副作用 exactly-once，采用至少一次+业务幂等"],
+      "tables": ["out-of-scope: Redis 不保存实例/节点/attempt 权威状态，大文件不进核心数据库"],
+      "tests": ["out-of-scope: 范围守卫测试阻止新增任意脚本节点、Redis 事实源或 AI 自动执行路径"],
+      "docs": ["out-of-scope: README/ADR/发布说明持续声明这些边界与已知限制"],
+      "implementationStatus": "out-of-scope",
+      "acceptanceGates": ["SCOPE-GUARD"]
+    }
+  ]
+}

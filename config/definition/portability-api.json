@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-09",
+  "requirement": "REQ-DEF-001",
+  "operations": [
+    { "path": "/api/v1/workflows/{workflowId}/clone", "method": "post", "operationId": "cloneWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"] },
+    { "path": "/api/v1/workflows/{workflowId}/export", "method": "get", "operationId": "exportWorkflow", "successStatus": "200", "requiredHeaders": [] },
+    { "path": "/api/v1/workflows/import", "method": "post", "operationId": "importWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"] },
+    { "path": "/api/v1/workflows/{workflowId}/versions/diff", "method": "get", "operationId": "diffWorkflowVersions", "successStatus": "200", "requiredHeaders": [] }
+  ],
+  "bundle": {
+    "format": "workflow-platform-definition",
+    "formatVersion": 1,
+    "sourceKinds": ["draft", "published_version"],
+    "checksum": "sha256-canonical-dsl",
+    "maximumResourceReferences": 10000,
+    "resourceFields": ["kind", "reference"],
+    "forbiddenFields": ["tenantId", "projectId", "endpoint", "config", "ciphertext", "externalKey", "keyVersion", "secretMaterial"]
+  },
+  "resourceMapping": {
+    "knownDslFields": ["hmacSecretRef", "connectorRef", "secretRefs"],
+    "importPolicy": "complete-explicit-mapping",
+    "sameProjectClonePolicy": "identity-with-optional-overrides",
+    "crossProjectClonePolicy": "complete-explicit-mapping",
+    "unknownOrDuplicateMapping": "reject"
+  },
+  "writes": {
+    "idempotencyWindowHours": 24,
+    "cloneScope": "workflow:clone:{sourceWorkflowId}",
+    "importScope": "workflow:import",
+    "targetState": "DRAFT",
+    "targetDraftRevision": 1,
+    "auditActions": ["workflow.definition.clone", "workflow.definition.import"],
+    "transaction": ["tenant-context", "idempotency-claim", "source-read-or-bundle-validation", "active-target-project", "draft-insert", "audit", "idempotency-completion"]
+  },
+  "diff": {
+    "sources": "published-versions-only",
+    "pathFormat": "rfc6901-json-pointer",
+    "ordering": "object-key-lexical-array-index",
+    "operations": ["add", "remove", "replace"],
+    "maximumPublicChanges": 1000,
+    "maximumValuePreviewBytes": 4096,
+    "oversizedPreview": ["type", "sha256", "truncated"]
+  },
+  "security": {
+    "tenantContextFunction": "public.app_set_tenant_context",
+    "forcedRlsRequired": true,
+    "crossTenantStatus": 404,
+    "cacheControl": "no-store",
+    "secretMaterialAllowed": false,
+    "publishRevalidationStillRequired": true,
+    "maximumHttpDocumentCharacters": 2200000
+  },
+  "sourceBindings": {
+    "controller": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityController.java",
+    "service": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityService.java",
+    "store": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStore.java",
+    "resourceMapper": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowResourceReferences.java",
+    "jsonDiff": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowJsonDiff.java",
+    "bundle": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowExportBundle.java",
+    "httpBounds": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/WorkflowDraftJacksonConfiguration.java",
+    "serviceTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityServiceTests.java",
+    "controllerTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPortabilityControllerTests.java",
+    "postgresTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java",
+    "traceability": "config/traceability/requirements.json"
+  },
+  "document": "docs/architecture/workflow-portability-and-version-diff-api.md"
+}

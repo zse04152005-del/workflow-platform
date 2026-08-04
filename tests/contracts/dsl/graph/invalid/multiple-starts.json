@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-multiple-starts",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start_a", "type": "start", "executorVersion": 1 },
+    { "id": "start_b", "type": "start", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "a_end", "from": "start_a", "to": "end", "on": "success" },
+    { "id": "b_end", "from": "start_b", "to": "end", "on": "success" }
+  ]
+}

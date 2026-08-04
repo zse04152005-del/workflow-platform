@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G2-11",
+  "requirement": "REQ-TEST-001",
+  "postgres": {
+    "image": "postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296",
+    "expectedVersionPrefix": "18.4",
+    "startupTimeoutSeconds": 120,
+    "reuse": false
+  },
+  "flyway": {
+    "expectedVersion": "11.7.2",
+    "migrationCount": 7,
+    "currentSchemaVersion": "7",
+    "repeatMigrationCount": 0,
+    "validateAfterMigration": true
+  },
+  "catalog": {
+    "businessTables": 22,
+    "businessColumns": 330,
+    "primaryKeys": 22,
+    "foreignKeys": 39,
+    "uniqueConstraints": 41,
+    "standaloneUniqueIndexes": 3,
+    "uniquenessGuards": 44,
+    "checkConstraints": 102,
+    "explicitIndexes": 47,
+    "forcedRlsTables": 22
+  },
+  "fixture": {
+    "rowsPerQueryFamily": 6000,
+    "statisticsCommand": "ANALYZE",
+    "plannerHintsAllowed": false,
+    "planFormat": "JSON",
+    "requireExactIndexName": true,
+    "forbidSequentialScan": true
+  },
+  "constraintProbes": [
+    { "id": "C-01", "kind": "check", "sqlState": "23514", "target": "ck_tenant_status" },
+    { "id": "C-02", "kind": "foreign-key", "sqlState": "23503", "target": "fk_workflow_definition_project" },
+    { "id": "C-03", "kind": "unique", "sqlState": "23505", "target": "uq_tenant_normalized_name" },
+    { "id": "C-04", "kind": "rls-read", "result": "cross-tenant-row-count-zero", "target": "tenant_tenant_isolation" },
+    { "id": "C-05", "kind": "rls-write", "sqlState": "42501", "target": "tenant_tenant_isolation" },
+    { "id": "C-06", "kind": "lifecycle-trigger", "sqlState": "55000", "target": "audit_log_append_only_guard" }
+  ],
+  "queryContracts": [
+    { "id": "Q-01", "table": "workflow_instance", "purpose": "tenant stable cursor", "index": "idx_workflow_instance_tenant_created" },
+    { "id": "Q-02", "table": "workflow_instance", "purpose": "business key search", "index": "idx_workflow_instance_business_key" },
+    { "id": "Q-03", "table": "node_instance", "purpose": "due task SKIP LOCKED scan", "index": "idx_node_instance_schedule" },
+    { "id": "Q-04", "table": "node_instance", "purpose": "expired lease recovery", "index": "idx_node_instance_lease_expiry" },
+    { "id": "Q-05", "table": "outbox_event", "purpose": "unpublished Outbox scan", "index": "idx_outbox_event_unpublished" },
+    { "id": "Q-06", "table": "schedule_occurrence", "purpose": "Cron due scan", "index": "idx_schedule_occurrence_due" },
+    { "id": "Q-07", "table": "human_task", "purpose": "assignee inbox", "index": "idx_human_task_assignee" },
+    { "id": "Q-08", "table": "human_task", "purpose": "role inbox", "index": "idx_human_task_candidate" },
+    { "id": "Q-09", "table": "dead_letter", "purpose": "open dead-letter operations", "index": "idx_dead_letter_open" },
+    { "id": "Q-10", "table": "audit_log", "purpose": "tenant audit cursor", "index": "idx_audit_log_tenant_time" }
+  ],
+  "sourceBindings": {
+    "integrationTest": "control-plane/src/test/java/com/workflowplatform/controlplane/database/DatabaseMigrationIT.java",
+    "queryFixture": "control-plane/src/test/resources/database/g2-11-query-plan-fixture.sql",
+    "runner": "scripts/database/test-g2-11-testcontainers.ps1",
+    "verifier": "scripts/database/verify-testcontainers-database.mjs",
+    "verifierTests": "scripts/database/test-testcontainers-database-verifier.mjs"
+  },
+  "document": "docs/architecture/testcontainers-database-verification.md"
+}

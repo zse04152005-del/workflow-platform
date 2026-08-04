@@ -1,0 +1,44 @@
+{
+  "component": "runtime-reliability-kernel",
+  "version": 2,
+  "gate": "G5",
+  "verifiedTasks": [
+    "G5-01",
+    "G5-02",
+    "G5-03",
+    "G5-04",
+    "G5-05",
+    "G5-06",
+    "G5-07",
+    "G5-08"
+  ],
+  "completedDependencies": ["G5-09", "G5-10", "G5-11"],
+  "deferredTasks": ["G5-12", "G5-13"],
+  "adr": "docs/adr/ADR-004-retry-lease-recovery-dead-letter-replay.md",
+  "delivery": "at-least-once",
+  "counterLifecycle": {
+    "dispatch_count": "successful-dispatch",
+    "attempt_no": "claim-enters-running",
+    "lease_generation": "successful-dispatch"
+  },
+  "retry": {
+    "classification": ["retryable", "non-retryable"],
+    "strategies": ["fixed", "linear", "exponential"],
+    "guards": ["maximum-attempts", "maximum-window", "retry-after"],
+    "jitter": "stable-bounded",
+    "ambiguousResult": "external-result-query-before-retry"
+  },
+  "fencing": ["worker-id", "lease-generation", "lease-not-expired"],
+  "recovery": ["expired-lease-scan", "attempt-abandoned", "lease-expired", "redispatch-new-generation", "late-result-rejected"],
+  "deduplication": ["consumer-name-event-id", "same-transaction-as-domain-result"],
+  "deadLetter": ["redacted-summary", "redacted-append-only-note", "24-hour-idempotency", "audit", "outbox-note-digest-only", "redispatch-new-instance", "source-history-immutable"],
+  "evidence": {
+    "postgresql": [
+      "JdbcRuntimeTransitionStoreIT",
+      "JdbcRuntimeSchedulingStoreIT",
+      "JdbcWorkerTaskStoreIT",
+      "JdbcRuntimeControlStoreIT"
+    ],
+    "postgresqlKafka": ["RuntimeHappyPathE2EIT"]
+  }
+}

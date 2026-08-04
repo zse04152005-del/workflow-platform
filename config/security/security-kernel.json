@@ -1,0 +1,15 @@
+{
+  "component": "security-kernel",
+  "adr": "docs/adr/ADR-005-oidc-tenant-rbac-rls-admin-boundary.md",
+  "tasks": ["G6-01", "G6-02", "G6-03", "G6-04", "G6-05", "G6-06", "G6-07", "G6-08", "G6-09", "G6-10", "G6-11", "G6-12"],
+  "oidc": ["issuer", "audience", "expiry", "not-before", "signature"],
+  "tenantContext": "verified-request-attribute-and-transaction-local-postgres",
+  "rls": "enabled-and-forced-on-22-business-tables",
+  "platformAdmin": "separate-audited-role-no-tenant-api-escalation",
+  "secretProviders": ["aes-gcm-development", "kms-vault-production-port"],
+  "ssrf": ["https", "host-allowlist", "port", "dns-answer", "ip-class", "redirect-each-hop", "response-size"],
+  "limits": ["request-size", "timeout", "tenant-rate", "tenant-concurrency", "worker-backpressure"],
+  "audit": ["append-only", "before-after-redaction", "actor", "ip", "reason", "traceId"],
+  "supplyChain": ["dependency-scan", "secret-scan", "sbom", "security-headers"],
+  "threatModel": "docs/security/threat-model.md"
+}

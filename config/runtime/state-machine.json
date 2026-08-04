@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G4-01",
+  "requirements": ["REQ-STATE-001", "REQ-RETRY-001", "REQ-CRON-001"],
+  "status": "implemented",
+  "scope": "state-definition-only",
+  "transitionProtocol": {
+    "expectedStatusField": "status",
+    "expectedVersionField": "version",
+    "versionIncrement": 1,
+    "conditionalUpdateRequired": true,
+    "staleWriteFailure": "VERSION_CONFLICT",
+    "invalidTransitionFailure": "INVALID_STATE_TRANSITION",
+    "terminalWritePolicy": "reject",
+    "databaseAuthoritative": true,
+    "enumOrdinalInferenceForbidden": true,
+    "transactionBoundary": ["state_row", "audit_log", "outbox_event"],
+    "outboxEventRequiredFor": ["instance", "node", "attempt", "schedule"]
+  },
+  "invariants": [
+    "every transition names an expected source status",
+    "every transition compares and increments version atomically",
+    "terminal states have no outgoing transitions",
+    "retry creates a new attempt and never rewrites historical attempt state",
+    "a stale worker token cannot complete or mutate a node",
+    "state, audit and outbox commit or roll back together",
+    "database remains the only authoritative runtime state"
+  ],
+  "entities": [
+    {
+      "id": "instance",
+      "table": "workflow_instance",
+      "stateField": "status",
+      "states": ["CREATED", "RUNNING", "PAUSE_REQUESTED", "PAUSED", "CANCEL_REQUESTED", "CANCELLED", "SUCCEEDED", "FAILED"],
+      "initialStates": ["CREATED"],
+      "terminalStates": ["CANCELLED", "SUCCEEDED", "FAILED"],
+      "transitions": [
+        {"from": "CREATED", "to": "RUNNING", "command": "start", "actors": ["control_plane", "scheduler"], "guards": ["expected_status", "expected_version", "definition_version_bound"], "effects": ["set_started_at", "emit_instance_started"]},
+        {"from": "RUNNING", "to": "PAUSE_REQUESTED", "command": "request_pause", "actors": ["control_plane"], "guards": ["expected_status", "expected_version", "operator_authorized"], "effects": ["emit_instance_pause_requested"]},
+        {"from": "RUNNING", "to": "CANCEL_REQUESTED", "command": "request_cancel", "actors": ["control_plane"], "guards": ["expected_status", "expected_version", "operator_authorized"], "effects": ["emit_instance_cancel_requested"]},
+        {"from": "RUNNING", "to": "SUCCEEDED", "command": "complete_success", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "all_nodes_terminal_success"], "effects": ["set_completed_at", "emit_instance_succeeded"]},
+        {"from": "RUNNING", "to": "FAILED", "command": "complete_failure", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "failure_recorded"], "effects": ["set_completed_at", "emit_instance_failed"]},
+        {"from": "PAUSE_REQUESTED", "to": "PAUSED", "command": "pause", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "no_active_execution"], "effects": ["emit_instance_paused"]},
+        {"from": "PAUSE_REQUESTED", "to": "CANCEL_REQUESTED", "command": "request_cancel", "actors": ["control_plane"], "guards": ["expected_status", "expected_version", "operator_authorized"], "effects": ["emit_instance_cancel_requested"]},
+        {"from": "PAUSE_REQUESTED", "to": "FAILED", "command": "pause_failure", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "failure_recorded"], "effects": ["set_completed_at", "emit_instance_failed"]},
+        {"from": "PAUSED", "to": "RUNNING", "command": "resume", "actors": ["control_plane", "scheduler"], "guards": ["expected_status", "expected_version", "operator_authorized"], "effects": ["emit_instance_resumed"]},
+        {"from": "PAUSED", "to": "CANCEL_REQUESTED", "command": "request_cancel", "actors": ["control_plane"], "guards": ["expected_status", "expected_version", "operator_authorized"], "effects": ["emit_instance_cancel_requested"]},
+        {"from": "CANCEL_REQUESTED", "to": "CANCELLED", "command": "cancel", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "no_active_execution"], "effects": ["set_completed_at", "emit_instance_cancelled"]}
+      ]
+    },
+    {
+      "id": "node",
+      "table": "node_instance",
+      "stateField": "status",
+      "states": ["PENDING", "READY", "DISPATCHED", "RUNNING", "RETRY_WAIT", "WAITING_TIMER", "WAITING_APPROVAL", "SUCCEEDED", "FAILED", "CANCELLED"],
+      "initialStates": ["PENDING"],
+      "terminalStates": ["SUCCEEDED", "FAILED", "CANCELLED"],
+      "transitions": [
+        {"from": "PENDING", "to": "READY", "command": "make_ready", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "predecessors_satisfied"], "effects": ["set_next_schedule_at", "emit_task_ready"]},
+        {"from": "PENDING", "to": "CANCELLED", "command": "cancel_pending", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["emit_node_cancelled"]},
+        {"from": "READY", "to": "DISPATCHED", "command": "dispatch", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "dispatch_capacity_available"], "effects": ["clear_next_schedule_at", "set_dispatch_count", "set_lease_generation", "emit_task_dispatched"]},
+        {"from": "READY", "to": "WAITING_TIMER", "command": "schedule_timer", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "timer_due_valid"], "effects": ["set_next_schedule_at", "emit_node_timer_waiting"]},
+        {"from": "READY", "to": "WAITING_APPROVAL", "command": "wait_approval", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "approval_required"], "effects": ["clear_next_schedule_at", "emit_node_approval_waiting"]},
+        {"from": "READY", "to": "CANCELLED", "command": "cancel_ready", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["clear_next_schedule_at", "emit_node_cancelled"]},
+        {"from": "DISPATCHED", "to": "RUNNING", "command": "claim", "actors": ["worker"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches"], "effects": ["insert_running_attempt", "emit_task_running"]},
+        {"from": "DISPATCHED", "to": "READY", "command": "lease_expired", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "lease_expired"], "effects": ["clear_lease", "set_next_schedule_at", "emit_task_requeued"]},
+        {"from": "DISPATCHED", "to": "CANCELLED", "command": "cancel_dispatched", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["clear_lease", "emit_node_cancelled"]},
+        {"from": "RUNNING", "to": "READY", "command": "lease_expired", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "lease_expired"], "effects": ["clear_lease", "set_next_schedule_at", "emit_task_requeued"]},
+        {"from": "RUNNING", "to": "SUCCEEDED", "command": "complete_success", "actors": ["worker"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches", "attempt_succeeded"], "effects": ["clear_lease", "set_output_summary", "emit_node_succeeded"]},
+        {"from": "RUNNING", "to": "FAILED", "command": "complete_failure", "actors": ["worker"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches", "failure_recorded"], "effects": ["clear_lease", "set_error_summary", "emit_node_failed"]},
+        {"from": "RUNNING", "to": "RETRY_WAIT", "command": "schedule_retry", "actors": ["worker", "runtime"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches", "retry_allowed", "next_schedule_valid"], "effects": ["clear_lease", "increment_attempt_no", "set_next_schedule_at", "emit_task_retry_scheduled"]},
+        {"from": "RUNNING", "to": "WAITING_TIMER", "command": "wait_timer", "actors": ["worker", "runtime"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches", "timer_due_valid"], "effects": ["clear_lease", "set_next_schedule_at", "emit_node_timer_waiting"]},
+        {"from": "RUNNING", "to": "WAITING_APPROVAL", "command": "wait_approval", "actors": ["worker", "runtime"], "guards": ["expected_status", "expected_version", "current_lease", "fencing_token_matches", "approval_required"], "effects": ["clear_lease", "emit_node_approval_waiting"]},
+        {"from": "RUNNING", "to": "CANCELLED", "command": "cancel_running", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "instance_cancelling", "execution_stopped"], "effects": ["clear_lease", "emit_node_cancelled"]},
+        {"from": "RETRY_WAIT", "to": "READY", "command": "retry_due", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "next_schedule_due"], "effects": ["set_next_schedule_at", "emit_task_ready"]},
+        {"from": "RETRY_WAIT", "to": "CANCELLED", "command": "cancel_retry", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["clear_next_schedule_at", "emit_node_cancelled"]},
+        {"from": "WAITING_TIMER", "to": "READY", "command": "timer_due", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "next_schedule_due"], "effects": ["set_next_schedule_at", "emit_task_ready"]},
+        {"from": "WAITING_TIMER", "to": "CANCELLED", "command": "cancel_timer", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["clear_next_schedule_at", "emit_node_cancelled"]},
+        {"from": "WAITING_APPROVAL", "to": "READY", "command": "approval_resume", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "approval_decision_allows_resume"], "effects": ["set_next_schedule_at", "emit_task_ready"]},
+        {"from": "WAITING_APPROVAL", "to": "SUCCEEDED", "command": "approval_complete", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "approval_decision_succeeds"], "effects": ["set_output_summary", "emit_node_succeeded"]},
+        {"from": "WAITING_APPROVAL", "to": "FAILED", "command": "approval_reject", "actors": ["runtime"], "guards": ["expected_status", "expected_version", "approval_decision_fails"], "effects": ["set_error_summary", "emit_node_failed"]},
+        {"from": "WAITING_APPROVAL", "to": "CANCELLED", "command": "cancel_approval", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version", "instance_cancelling"], "effects": ["emit_node_cancelled"]}
+      ]
+    },
+    {
+      "id": "attempt",
+      "table": "task_execution",
+      "stateField": "status",
+      "states": ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABANDONED", "CANCELLED"],
+      "initialStates": ["RUNNING"],
+      "terminalStates": ["SUCCEEDED", "FAILED", "TIMED_OUT", "ABANDONED", "CANCELLED"],
+      "transitions": [
+        {"from": "RUNNING", "to": "SUCCEEDED", "command": "finish_success", "actors": ["worker"], "guards": ["expected_status", "expected_version_zero_or_current", "current_lease", "fencing_token_matches"], "effects": ["set_finished_at", "set_output_summary", "emit_attempt_succeeded"]},
+        {"from": "RUNNING", "to": "FAILED", "command": "finish_failure", "actors": ["worker"], "guards": ["expected_status", "expected_version_zero_or_current", "current_lease", "fencing_token_matches"], "effects": ["set_finished_at", "set_error_summary", "emit_attempt_failed"]},
+        {"from": "RUNNING", "to": "TIMED_OUT", "command": "timeout", "actors": ["scheduler", "worker"], "guards": ["expected_status", "expected_version_zero_or_current", "execution_deadline_reached"], "effects": ["set_finished_at", "set_error_summary", "emit_attempt_timed_out"]},
+        {"from": "RUNNING", "to": "ABANDONED", "command": "abandon", "actors": ["scheduler"], "guards": ["expected_status", "expected_version_zero_or_current", "lease_expired", "recovery_policy_allows_abandon"], "effects": ["set_finished_at", "set_error_summary", "emit_attempt_abandoned"]},
+        {"from": "RUNNING", "to": "CANCELLED", "command": "cancel", "actors": ["runtime", "scheduler"], "guards": ["expected_status", "expected_version_zero_or_current", "instance_cancelling", "execution_stopped"], "effects": ["set_finished_at", "set_error_summary", "emit_attempt_cancelled"]}
+      ]
+    },
+    {
+      "id": "schedule",
+      "table": "schedule_occurrence",
+      "stateField": "status",
+      "states": ["PENDING", "CLAIMED", "FIRED", "SKIPPED", "FAILED"],
+      "initialStates": ["PENDING"],
+      "terminalStates": ["FIRED", "SKIPPED", "FAILED"],
+      "transitions": [
+        {"from": "PENDING", "to": "CLAIMED", "command": "claim_occurrence", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "scheduled_at_due", "skip_locked"], "effects": ["set_claimed_at"]},
+        {"from": "PENDING", "to": "SKIPPED", "command": "skip_occurrence", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "misfire_policy_allows_skip"], "effects": ["set_claimed_at", "emit_occurrence_skipped"]},
+        {"from": "CLAIMED", "to": "FIRED", "command": "fire_occurrence", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "instance_created"], "effects": ["set_instance_id", "emit_occurrence_fired"]},
+        {"from": "CLAIMED", "to": "FAILED", "command": "fail_occurrence", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "failure_recorded"], "effects": ["set_claimed_at", "emit_occurrence_failed"]},
+        {"from": "CLAIMED", "to": "SKIPPED", "command": "skip_claimed_occurrence", "actors": ["scheduler"], "guards": ["expected_status", "expected_version", "misfire_policy_allows_skip"], "effects": ["emit_occurrence_skipped"]}
+      ]
+    }
+  ],
+  "sourceBindings": {
+    "adr": "docs/adr/ADR-003-runtime-instance-node-attempt-state-machines.md",
+    "architectureDocument": "docs/architecture/runtime-state-machines.md",
+    "traceability": "config/traceability/requirements.json",
+    "matrix": "docs/planning/03-需求追踪矩阵.md",
+    "verifier": "scripts/runtime/verify-state-machine.mjs",
+    "verifierTests": "scripts/runtime/test-state-machine-verifier.mjs"
+  },
+  "document": "docs/adr/ADR-003-runtime-instance-node-attempt-state-machines.md"
+}

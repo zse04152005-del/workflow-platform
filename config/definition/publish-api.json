@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-08",
+  "requirements": ["REQ-DEF-001", "REQ-REL-001", "REQ-AUDIT-001"],
+  "operation": {
+    "path": "/api/v1/workflows/{workflowId}/publish",
+    "method": "post",
+    "operationId": "publishWorkflow",
+    "requiredHeaders": ["Idempotency-Key"],
+    "successStatus": "201",
+    "failureStatuses": ["400", "404", "409", "default"]
+  },
+  "request": {
+    "required": ["expectedDraftRevision"],
+    "releaseNoteMaximum": 1000,
+    "idempotencyWindowHours": 24,
+    "requestDigestBindings": [
+      "workflowId",
+      "expectedDraftRevision",
+      "releaseNote"
+    ]
+  },
+  "transaction": [
+    "tenant-context",
+    "idempotency-claim",
+    "draft-row-lock",
+    "revision-check",
+    "parse",
+    "graph",
+    "resource-and-configuration",
+    "expression",
+    "version-and-trigger-snapshot",
+    "definition-activation",
+    "audit",
+    "outbox",
+    "idempotency-completion"
+  ],
+  "publication": {
+    "versionNumber": "tenant-definition-monotonic-from-1",
+    "checksum": "sha256-canonical-dsl",
+    "sameChecksumRepublish": "conflict",
+    "databaseImmutable": ["workflow_version", "trigger_config"],
+    "responseRequired": ["workflowId", "version", "checksum", "publishedAt"]
+  },
+  "audit": {
+    "action": "workflow.version.publish",
+    "appendOnly": true,
+    "releaseNoteField": "reason",
+    "secretMaterialAllowed": false
+  },
+  "event": {
+    "eventType": "workflow.version.published",
+    "schemaVersion": 1,
+    "producer": "control_plane",
+    "delivery": "transactional-outbox",
+    "payloadFields": [
+      "workflowId",
+      "workflowVersionId",
+      "version",
+      "checksum",
+      "draftRevision"
+    ]
+  },
+  "sourceBindings": {
+    "controller": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowPublicationController.java",
+    "service": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowPublicationService.java",
+    "validationService": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowValidationService.java",
+    "store": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowPublicationStore.java",
+    "draftStore": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStore.java",
+    "idempotency": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcIdempotencyRecords.java",
+    "definitionMigration": "control-plane/src/main/resources/db/migration/V2__create_definition_and_integrations.sql",
+    "outboxMigration": "control-plane/src/main/resources/db/migration/V4__create_reliability_and_leases.sql",
+    "auditMigration": "control-plane/src/main/resources/db/migration/V5__create_human_audit_and_quota.sql",
+    "controllerTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPublicationControllerTests.java",
+    "serviceTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowPublicationServiceTests.java",
+    "postgresTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java",
+    "traceability": "config/traceability/requirements.json"
+  },
+  "document": "docs/architecture/workflow-publication-api.md"
+}

@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.0.0",
+  "reviewedOn": "2026-07-30",
+  "task": "G2-01",
+  "system": {
+    "id": "workflow-platform",
+    "name": "企业级事件驱动智能工作流平台",
+    "purpose": "为跨系统自动化提供可定义、持久化、可恢复、多租户且可观测的工作流执行能力"
+  },
+  "people": [
+    { "id": "platform-admin", "name": "平台管理员", "responsibility": "租户、全局策略、容量与告警" },
+    { "id": "tenant-admin", "name": "租户管理员", "responsibility": "项目、成员、角色与密钥引用" },
+    { "id": "workflow-designer", "name": "流程设计者", "responsibility": "草稿、校验、发布与调试" },
+    { "id": "business-approver", "name": "业务审批人", "responsibility": "查看和处理人工待办" },
+    { "id": "api-developer", "name": "接入开发者", "responsibility": "通过 API/SDK 触发和查询流程" },
+    { "id": "operator", "name": "运维人员", "responsibility": "观测、暂停、恢复、死信和重放" }
+  ],
+  "externalSystems": [
+    { "id": "enterprise-idp", "name": "企业 OIDC / Keycloak", "responsibility": "身份认证与令牌签发" },
+    { "id": "calling-systems", "name": "业务调用系统", "responsibility": "通过 HTTP/SDK 提交流程触发和幂等键" },
+    { "id": "external-business", "name": "外部业务系统", "responsibility": "接收受管 HTTP 调用并提供幂等/结果查询" },
+    { "id": "telemetry-backends", "name": "Prometheus / Grafana / Loki / Tempo", "responsibility": "指标、日志、Trace、Dashboard 与告警" }
+  ],
+  "contextRelationships": [
+    { "from": "platform-admin", "to": "workflow-platform", "description": "管理平台级策略与容量", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "tenant-admin", "to": "workflow-platform", "description": "管理租户、项目、成员与密钥引用", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "workflow-designer", "to": "workflow-platform", "description": "编辑、校验和发布 DSL", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "business-approver", "to": "workflow-platform", "description": "处理人工待办", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "api-developer", "to": "workflow-platform", "description": "接入触发和查询 API", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "operator", "to": "workflow-platform", "description": "查询、暂停、恢复、重放与故障处置", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "calling-systems", "to": "workflow-platform", "description": "携带鉴权和 Idempotency-Key 触发流程", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "enterprise-idp", "to": "workflow-platform", "description": "签发并公开可验证的 OIDC token/JWKS", "protocol": "OIDC/HTTPS", "dataClass": "confidential" },
+    { "from": "workflow-platform", "to": "external-business", "description": "通过受管 endpoint 执行业务节点", "protocol": "HTTPS", "dataClass": "confidential" },
+    { "from": "workflow-platform", "to": "telemetry-backends", "description": "导出脱敏遥测", "protocol": "OTLP/PromQL", "dataClass": "internal" }
+  ],
+  "containers": [
+    {
+      "id": "web-console",
+      "name": "Web Console",
+      "type": "application",
+      "technology": "React / TypeScript / Vite",
+      "responsibility": "定义、实例、人工待办、失败运维和审计的浏览器界面",
+      "deploymentStatus": "scaffolded",
+      "authoritativeState": false,
+      "trustBoundary": "browser"
+    },
+    {
+      "id": "control-plane",
+      "name": "Control Plane",
+      "type": "application",
+      "technology": "Java 21 / Spring Boot",
+      "responsibility": "IAM 适配、定义、触发、状态机、调度、人工任务、审计与运维 API",
+      "deploymentStatus": "scaffolded",
+      "authoritativeState": false,
+      "trustBoundary": "application"
+    },
+    {
+      "id": "worker",
+      "name": "Worker",
+      "type": "application",
+      "technology": "Java 21 / Spring Boot",
+      "responsibility": "消费任务通知、领取租约、执行节点、心跳和带 fencing 的结果上报",
+      "deploymentStatus": "scaffolded",
+      "authoritativeState": false,
+      "trustBoundary": "worker"
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "type": "data-store",
+      "technology": "PostgreSQL 18 / Flyway",
+      "responsibility": "实例、节点、attempt、定义、租约、幂等、审计和 Outbox 的唯一事实源",
+      "deploymentStatus": "local-compose-available",
+      "authoritativeState": true,
+      "trustBoundary": "data"
+    },
+    {
+      "id": "kafka",
+      "name": "Kafka",
+      "type": "message-broker",
+      "technology": "Kafka 4 KRaft",
+      "responsibility": "至少一次任务通知与领域事件传播，不保存权威工作流状态",
+      "deploymentStatus": "local-compose-available",
+      "authoritativeState": false,
+      "trustBoundary": "data"
+    },
+    {
+      "id": "redis",
+      "name": "Redis",
+      "type": "cache",
+      "technology": "Redis 8",
+      "responsibility": "可重建缓存、短期限流和非权威协调",
+      "deploymentStatus": "local-compose-available",
+      "authoritativeState": false,
+      "trustBoundary": "data"
+    },
+    {
+      "id": "minio",
+      "name": "MinIO / S3",
+      "type": "object-store",
+      "technology": "S3-compatible API",
+      "responsibility": "大 Payload 与附件；PostgreSQL 保存引用、大小和摘要",
+      "deploymentStatus": "local-compose-available",
+      "authoritativeState": false,
+      "trustBoundary": "data"
+    },
+    {
+      "id": "keycloak",
+      "name": "Keycloak",
+      "type": "identity-provider",
+      "technology": "OIDC",
+      "responsibility": "本地身份 Provider；生产由企业 OIDC 替换",
+      "deploymentStatus": "local-compose-available",
+      "authoritativeState": false,
+      "trustBoundary": "identity"
+    },
+    {
+      "id": "otel-collector",
+      "name": "OpenTelemetry Collector",
+      "type": "telemetry-pipeline",
+      "technology": "OTLP",
+      "responsibility": "接收、处理和导出脱敏遥测",
+      "deploymentStatus": "planned",
+      "authoritativeState": false,
+      "trustBoundary": "observability"
+    },
+    {
+      "id": "observability-backends",
+      "name": "Observability Backends",
+      "type": "telemetry-store",
+      "technology": "Prometheus / Grafana / Loki / Tempo",
+      "responsibility": "指标、日志、Trace、Dashboard 与告警",
+      "deploymentStatus": "planned",
+      "authoritativeState": false,
+      "trustBoundary": "observability"
+    }
+  ],
+  "containerRelationships": [
+    { "from": "platform-admin", "to": "web-console", "protocol": "HTTPS", "description": "平台治理", "trustBoundaryCrossing": true },
+    { "from": "tenant-admin", "to": "web-console", "protocol": "HTTPS", "description": "租户治理", "trustBoundaryCrossing": true },
+    { "from": "workflow-designer", "to": "web-console", "protocol": "HTTPS", "description": "定义与发布", "trustBoundaryCrossing": true },
+    { "from": "business-approver", "to": "web-console", "protocol": "HTTPS", "description": "人工待办", "trustBoundaryCrossing": true },
+    { "from": "operator", "to": "web-console", "protocol": "HTTPS", "description": "运行运维", "trustBoundaryCrossing": true },
+    { "from": "web-console", "to": "control-plane", "protocol": "HTTPS / OpenAPI", "description": "受权业务与运维 API", "trustBoundaryCrossing": true },
+    { "from": "calling-systems", "to": "control-plane", "protocol": "HTTPS / OpenAPI", "description": "HTTP/手动触发与查询", "trustBoundaryCrossing": true },
+    { "from": "keycloak", "to": "web-console", "protocol": "OIDC/HTTPS", "description": "Authorization Code + PKCE", "trustBoundaryCrossing": true },
+    { "from": "keycloak", "to": "control-plane", "protocol": "OIDC/JWKS over HTTPS", "description": "Token issuer/audience/signature 验证", "trustBoundaryCrossing": true },
+    { "from": "control-plane", "to": "postgres", "protocol": "JDBC/TLS", "description": "权威事务状态、审计与 Outbox", "trustBoundaryCrossing": true },
+    { "from": "control-plane", "to": "kafka", "protocol": "Kafka/TLS", "description": "Outbox Publisher 发布版本化事件", "trustBoundaryCrossing": true },
+    { "from": "control-plane", "to": "redis", "protocol": "Redis/TLS", "description": "可降级缓存与限流", "trustBoundaryCrossing": true },
+    { "from": "control-plane", "to": "minio", "protocol": "S3/HTTPS", "description": "大 Payload 引用", "trustBoundaryCrossing": true },
+    { "from": "kafka", "to": "worker", "protocol": "Kafka/TLS", "description": "至少一次任务通知", "trustBoundaryCrossing": true },
+    { "from": "worker", "to": "postgres", "protocol": "JDBC/TLS", "description": "受限租约领取、心跳、attempt 和结果条件更新", "trustBoundaryCrossing": true },
+    { "from": "worker", "to": "minio", "protocol": "S3/HTTPS", "description": "读取/写入受权 Payload", "trustBoundaryCrossing": true },
+    { "from": "worker", "to": "external-business", "protocol": "HTTPS", "description": "SSRF 校验后的受管业务调用", "trustBoundaryCrossing": true },
+    { "from": "control-plane", "to": "otel-collector", "protocol": "OTLP/TLS", "description": "脱敏遥测", "trustBoundaryCrossing": true },
+    { "from": "worker", "to": "otel-collector", "protocol": "OTLP/TLS", "description": "脱敏遥测", "trustBoundaryCrossing": true },
+    { "from": "otel-collector", "to": "observability-backends", "protocol": "OTLP/Remote Write", "description": "处理后的日志/指标/Trace", "trustBoundaryCrossing": false }
+  ],
+  "controlPlaneModules": [
+    { "id": "security", "javaPackageSegment": "security", "responsibility": "OIDC、tenant context、密钥 Provider 与出站策略", "allowedDependencies": [] },
+    { "id": "audit", "javaPackageSegment": "audit", "responsibility": "追加审计与受权查询", "allowedDependencies": [] },
+    { "id": "tenant", "javaPackageSegment": "tenant", "responsibility": "租户、项目、成员、角色与配额", "allowedDependencies": ["security", "audit"] },
+    { "id": "definition", "javaPackageSegment": "definition", "responsibility": "DSL 草稿、校验、不可变版本与触发配置", "allowedDependencies": ["tenant", "security", "audit"] },
+    { "id": "runtime", "javaPackageSegment": "runtime", "responsibility": "实例状态机、DAG 推进、幂等、重试、死信与实例控制", "allowedDependencies": ["definition", "tenant", "security", "audit"] },
+    { "id": "scheduler", "javaPackageSegment": "scheduler", "responsibility": "到期扫描、租约回收与 Outbox 发布协调", "allowedDependencies": ["runtime", "audit"] },
+    { "id": "human-task", "javaPackageSegment": "humantask", "responsibility": "待办、首次决策、转交与超时", "allowedDependencies": ["runtime", "tenant", "security", "audit"] }
+  ],
+  "technicalComponents": [
+    {
+      "id": "control-plane-platform-adapter",
+      "responsibility": "提供事务绑定的 OutboxPort、时间/ID 和基础持久化适配，不承载业务规则"
+    }
+  ],
+  "dataOwnership": [
+    { "dataset": "tenant, project, membership, role, role_binding, quota_usage", "owner": "tenant", "authorizedWriters": ["tenant"], "accessRule": "其他模块只通过 tenant 根包公开 application API 读取授权结论" },
+    { "dataset": "workflow_definition, workflow_version, trigger_config, connector", "owner": "definition", "authorizedWriters": ["definition"], "accessRule": "发布版本不可变；runtime 只读取公开版本快照" },
+    { "dataset": "workflow_instance, node_instance, task_execution, processed_event, idempotency_record, dead_letter, worker_lease", "owner": "runtime", "authorizedWriters": ["runtime", "worker"], "accessRule": "Worker 仅可执行版本化租约/心跳/attempt/结果条件命令，不得任意查询或改写其他租户状态" },
+    { "dataset": "schedule_occurrence", "owner": "scheduler", "authorizedWriters": ["scheduler"], "accessRule": "runtime 通过调度公开 API/事件接收 occurrence，不直接写表" },
+    { "dataset": "human_task", "owner": "human-task", "authorizedWriters": ["human-task"], "accessRule": "runtime 通过公开 application API 编排等待状态，不直接作出审批决策" },
+    { "dataset": "secret_reference, security_configuration", "owner": "security", "authorizedWriters": ["security"], "accessRule": "其他模块只传引用并调用受权 Provider，永不读取密文" },
+    { "dataset": "audit_log", "owner": "audit", "authorizedWriters": ["audit"], "accessRule": "其他模块调用 append-only AuditPort，禁止更新或删除历史" },
+    { "dataset": "outbox_event", "owner": "control-plane-platform-adapter", "authorizedWriters": ["control-plane-platform-adapter"], "accessRule": "业务模块在同一事务调用 OutboxPort；禁止自行发布 Kafka 替代事务 Outbox" }
+  ],
+  "forbiddenDependencies": [
+    { "id": "FD-01", "rule": "control-plane must not compile-depend on worker" },
+    { "id": "FD-02", "rule": "worker must not compile-depend on control-plane" },
+    { "id": "FD-03", "rule": "production modules must not depend on test-support" },
+    { "id": "FD-04", "rule": "shared-contracts must not contain repositories, Spring services, or shared business entities" },
+    { "id": "FD-05", "rule": "control-plane modules must not access another module internal package, repository, or owned table" },
+    { "id": "FD-06", "rule": "web-console must not read backend internals or databases directly" },
+    { "id": "FD-07", "rule": "Redis and Kafka must not become authoritative workflow state" }
+  ],
+  "documents": {
+    "architectureIndex": "docs/architecture/README.md",
+    "diagramViews": "docs/architecture/c4-architecture-views.md",
+    "moduleBoundary": "docs/architecture/control-plane-module-boundaries.md",
+    "adrTechnology": "docs/adr/ADR-001-technology-stack-and-module-boundaries.md",
+    "adrReliability": "docs/adr/ADR-002-reliable-messaging-idempotency-and-task-leases.md"
+  }
+}

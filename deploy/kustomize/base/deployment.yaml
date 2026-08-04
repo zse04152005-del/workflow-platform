@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: workflow-platform }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: workflow-platform } }
+  template:
+    metadata: { labels: { app: workflow-platform } }
+    spec:
+      containers:
+        - name: control-plane
+          image: workflow-platform-control-plane:immutable-git-sha
+          ports: [{ containerPort: 8080 }]
+          resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }

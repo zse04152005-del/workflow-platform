@@ -1,0 +1,5 @@
+packages:
+  - web-console
+
+allowBuilds:
+  esbuild: true

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-ambiguous-transition",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "task", "type": "http", "executorVersion": 1 },
+    { "id": "success_end", "type": "end", "executorVersion": 1 },
+    { "id": "always_end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_task", "from": "start", "to": "task", "on": "success" },
+    { "id": "task_success", "from": "task", "to": "success_end", "on": "success" },
+    { "id": "task_always", "from": "task", "to": "always_end", "on": "always" }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "backup": { "format": "postgres-custom", "noOwner": true, "encryptedStorage": "operator-provided" },
+  "restore": ["new-database", "flyway-check", "smoke-e2e", "cutover-approval"],
+  "upgrade": ["previous-version", "compatibility-window", "rollback", "roll-forward"],
+  "stopConditions": ["migration-failure", "checksum-drift", "smoke-failure", "error-budget-breach"]
+}

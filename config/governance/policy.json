@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "1.0.0",
+  "reviewedOn": "2026-07-30",
+  "branching": {
+    "defaultBranch": "main",
+    "allowedTypes": [
+      "feat",
+      "fix",
+      "docs",
+      "test",
+      "refactor",
+      "perf",
+      "build",
+      "ci",
+      "chore"
+    ],
+    "pattern": "^(feat|fix|docs|test|refactor|perf|build|ci|chore)/(g(?:[0-9]|1[0-2])-[0-9]{2}|issue-[1-9][0-9]*)-[a-z0-9]+(?:-[a-z0-9]+)*$",
+    "validExamples": [
+      "feat/g4-09-task-leasing",
+      "fix/g5-03-stale-worker-result",
+      "docs/g0-06-governance-baseline",
+      "test/issue-17-tenant-isolation"
+    ],
+    "invalidExamples": [
+      "feature/g4-09-task-leasing",
+      "feat/task-leasing",
+      "feat/G4-09-task-leasing",
+      "feat/g4-09_task_leasing",
+      "feat/g13-01-future-stage",
+      "main"
+    ]
+  },
+  "commits": {
+    "allowedTypes": [
+      "feat",
+      "fix",
+      "docs",
+      "test",
+      "refactor",
+      "perf",
+      "build",
+      "ci",
+      "chore",
+      "revert"
+    ],
+    "recommendedScopes": [
+      "control-plane",
+      "definition",
+      "runtime",
+      "scheduler",
+      "human-task",
+      "security",
+      "worker",
+      "contracts",
+      "web",
+      "deploy",
+      "docs"
+    ],
+    "headerPattern": "^(feat|fix|docs|test|refactor|perf|build|ci|chore|revert)(\\([a-z0-9][a-z0-9-]*\\))?(!)?: [a-z0-9\\u4e00-\\u9fff][^\\r\\n]{0,71}$",
+    "maxHeaderLength": 100,
+    "validExamples": [
+      "feat(runtime): add optimistic node transition",
+      "fix(worker): reject stale lease result",
+      "docs: 补充发布兼容规则",
+      "feat(contracts)!: introduce api v2"
+    ],
+    "invalidExamples": [
+      "update files",
+      "Feat(runtime): add transition",
+      "feat(runtime) add transition",
+      "feat(runtime): Add transition",
+      "feat(runtime): add transition\nsecond header"
+    ]
+  },
+  "versions": {
+    "currentBaseVersion": "0.1.0",
+    "mavenDevelopmentVersion": "0.1.0-SNAPSHOT",
+    "releaseTagPattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(alpha|beta|rc)\\.([1-9][0-9]*))?$",
+    "stableTagExample": "v0.1.0",
+    "prereleaseTagExample": "v0.1.0-rc.1",
+    "invalidTagExamples": ["0.1.0", "v01.1.0", "v0.1", "v0.1.0-rc.0", "latest"],
+    "preOneBreakingIncrement": "minor",
+    "stableBreakingIncrement": "major",
+    "additiveIncrement": "minor",
+    "compatibleFixIncrement": "patch"
+  },
+  "contracts": {
+    "openApi": {
+      "major": 1,
+      "pathPrefix": "/api/v1",
+      "compatibleWindowPreviousMinor": 1,
+      "breakingAction": "new-major-path-and-adr"
+    },
+    "dsl": {
+      "schemaVersion": 1,
+      "versionField": "schemaVersion",
+      "breakingAction": "new-schema-version-and-upcaster"
+    },
+    "events": {
+      "schemaVersion": 1,
+      "versionField": "schemaVersion",
+      "breakingAction": "new-event-major-and-consumer-migration"
+    },
+    "database": {
+      "migrationPattern": "^V([1-9][0-9]*(?:_[0-9]+)*)__([a-z][a-z0-9_]*)\\.sql$",
+      "appendOnly": true,
+      "checksumAlgorithm": "sha256",
+      "compatibilityStrategy": "expand-migrate-contract"
+    }
+  },
+  "definitionOfDone": {
+    "requiredChecks": [
+      { "id": "DOD-01", "name": "范围与追踪" },
+      { "id": "DOD-02", "name": "实现与架构" },
+      { "id": "DOD-03", "name": "API、Schema 与数据" },
+      { "id": "DOD-04", "name": "自动化测试" },
+      { "id": "DOD-05", "name": "安全、隐私与租户隔离" },
+      { "id": "DOD-06", "name": "可靠性、并发与恢复" },
+      { "id": "DOD-07", "name": "可观测性与运维" },
+      { "id": "DOD-08", "name": "性能与容量声明" },
+      { "id": "DOD-09", "name": "文档与示例" },
+      { "id": "DOD-10", "name": "迁移、部署与发布" },
+      { "id": "DOD-11", "name": "证据与可复现性" },
+      { "id": "DOD-12", "name": "清理、评审与状态" }
+    ],
+    "notApplicableRequiresReason": true,
+    "completionMarker": "[x]"
+  },
+  "requiredDocuments": [
+    "CONTRIBUTING.md",
+    "docs/governance/definition-of-done.md",
+    "docs/governance/versioning-and-change-management.md",
+    "docs/planning/03-需求追踪矩阵.md"
+  ],
+  "requiredPackageScripts": [
+    "architecture:verify",
+    "architecture:test",
+    "domain:verify",
+    "domain:test",
+    "er:verify",
+    "er:test",
+    "governance:verify",
+    "governance:test",
+    "traceability:verify",
+    "traceability:test",
+    "verify"
+  ]
+}

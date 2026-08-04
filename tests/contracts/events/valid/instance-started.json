@@ -1,0 +1,16 @@
+{
+  "eventId": "019fb1d7-d968-78d0-b1a1-d7f2ac3e746b",
+  "eventType": "workflow.instance.started",
+  "occurredAt": "2026-07-30T17:00:00.123456Z",
+  "tenantId": "0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c493",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "schemaVersion": 1,
+  "producer": "control_plane",
+  "subject": "workflow-instance/019fb1d7-d968-78d0-b1a1-d7f2ac3e746b",
+  "dataContentType": "application/json",
+  "payload": {
+    "workflowInstanceId": "019fb1d7-d968-78d0-b1a1-d7f2ac3e746b",
+    "workflowVersion": 3
+  },
+  "futureOptionalField": "consumers-ignore-unknown-members"
+}

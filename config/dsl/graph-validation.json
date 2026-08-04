@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-03",
+  "requirement": "REQ-DSL-001",
+  "module": "definition",
+  "input": {
+    "schemaVersion": 1,
+    "javaType": "com.workflowplatform.contracts.dsl.WorkflowDefinition",
+    "maximumNodes": 500,
+    "maximumEdges": 2000
+  },
+  "nodeInvariants": {
+    "startCount": 1,
+    "minimumEndCount": 1,
+    "nodeIdsUnique": true,
+    "allNodesReachableFromStart": true,
+    "allNonEndNodesReachSomeEnd": true
+  },
+  "edgeInvariants": {
+    "edgeIdsUnique": true,
+    "sourceAndTargetMustExist": true,
+    "selfLoopsAllowed": false,
+    "incomingEdgesToStartAllowed": false,
+    "outgoingEdgesFromEndAllowed": false,
+    "duplicateRoutesAllowed": false,
+    "routeIdentity": ["from", "to", "on"]
+  },
+  "transitionMatrix": {
+    "start": ["success", "always"],
+    "end": [],
+    "http": ["success", "failure", "always"],
+    "condition": ["condition", "always"],
+    "delay": ["success", "failure", "always"],
+    "human_task": ["success", "failure", "always"]
+  },
+  "outgoingRules": {
+    "startExactly": 1,
+    "conditionMinimum": 2,
+    "conditionRequiresConditionalBranch": true,
+    "otherNonEndMinimum": 1,
+    "maximumPerNonConditionTransition": 1,
+    "alwaysExclusiveOutsideCondition": true,
+    "conditionAlwaysMaximum": 1
+  },
+  "cyclePolicy": {
+    "directedCyclesAllowed": false,
+    "reason": "DSL v1 has no explicit bounded loop construct",
+    "algorithm": "depth-first-search-three-color"
+  },
+  "determinism": {
+    "violationOrder": "validation-phase-then-definition-order",
+    "violationLocation": "bounded-json-pointer",
+    "maximumViolationPathLength": 128,
+    "topologicalTieBreak": "node-definition-index",
+    "complexity": "O(V+E)",
+    "maximumTraversalDepth": 500
+  },
+  "result": {
+    "javaType": "com.workflowplatform.controlplane.definition.ValidatedWorkflowGraph",
+    "fields": ["definition", "startNodeId", "endNodeIds", "topologicalNodeIds"],
+    "immutable": true
+  },
+  "failureCodes": [
+    "start_node_count_invalid",
+    "end_node_required",
+    "duplicate_node_id",
+    "duplicate_edge_id",
+    "unknown_edge_source",
+    "unknown_edge_target",
+    "self_loop_not_allowed",
+    "incoming_edge_to_start",
+    "outgoing_edge_from_end",
+    "transition_not_allowed",
+    "duplicate_edge_route",
+    "outgoing_transition_ambiguous",
+    "outgoing_edge_count_invalid",
+    "node_unreachable",
+    "node_cannot_reach_end",
+    "cycle_not_allowed"
+  ],
+  "deferred": {
+    "G3-04": "node-specific schemas, connector and secret authorization",
+    "G3-05": "CEL and JSONPath parsing, typing and resource sandbox",
+    "G3-10": "cross-version properties and extended malicious-input combinations"
+  },
+  "sourceBindings": {
+    "javaPackage": "control-plane/src/main/java/com/workflowplatform/controlplane/definition",
+    "javaImplementation": "DeterministicWorkflowGraphValidator.java",
+    "javaTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowGraphValidatorTests.java",
+    "fixtures": "tests/contracts/dsl/graph",
+    "verifier": "scripts/dsl/verify-dsl-graph-validation.mjs",
+    "verifierTests": "scripts/dsl/test-dsl-graph-validation-verifier.mjs"
+  },
+  "document": "docs/architecture/dsl-graph-validation.md"
+}

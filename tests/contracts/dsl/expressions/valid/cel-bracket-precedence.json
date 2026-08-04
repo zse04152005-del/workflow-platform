@@ -1,0 +1,6 @@
+{
+  "language": "CEL",
+  "site": "condition-edge",
+  "source": "input['approved'] || input.amount + 5 * 2 < 20",
+  "expectedType": "BOOLEAN"
+}

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G4-02",
+  "requirements": ["REQ-STATE-001"],
+  "status": "implemented",
+  "stateMachine": "config/runtime/state-machine.json",
+  "entities": ["instance", "node", "attempt", "schedule"],
+  "transitionCount": 45,
+  "protocol": {
+    "conditionalKey": ["tenant_id", "id", "status", "version"],
+    "versionIncrement": 1,
+    "databaseAuthoritative": true,
+    "transactionBoundary": ["state_row", "audit_log", "outbox_event"],
+    "tenantContextFunction": "public.app_set_tenant_context",
+    "actorAllowListRequired": true,
+    "workerFencingRequired": true,
+    "eventEnvelopeSchemaVersion": 1,
+    "secretFreePayload": true
+  },
+  "failures": [
+    "NOT_FOUND",
+    "VERSION_CONFLICT",
+    "INVALID_STATE_TRANSITION",
+    "ACTOR_NOT_ALLOWED",
+    "INVALID_EFFECTS",
+    "FENCING_TOKEN_CONFLICT"
+  ],
+  "tests": {
+    "unit": 4,
+    "postgresIntegration": 8,
+    "covers": [
+      "all_45_rules_registered",
+      "illegal_transition_rejected_before_io",
+      "actor_allow_list",
+      "state_dependent_effects",
+      "four_entity_persistence",
+      "optimistic_lock_concurrency",
+      "worker_fencing",
+      "independent_counter_increment",
+      "tenant_rls_non_disclosure",
+      "audit_outbox_atomic_rollback"
+    ]
+  },
+  "sourceBindings": {
+    "service": "control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeStateTransitionService.java",
+    "policy": "control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeTransitionPolicy.java",
+    "jdbcStore": "control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTransitionStore.java",
+    "unitTest": "control-plane/src/test/java/com/workflowplatform/controlplane/runtime/RuntimeStateTransitionServiceTests.java",
+    "integrationTest": "control-plane/src/test/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeTransitionStoreIT.java",
+    "architecture": "docs/architecture/runtime-state-transition-component.md",
+    "evidence": "docs/planning/evidence/G4-02-runtime-state-transition-component.md",
+    "verifier": "scripts/runtime/verify-state-transition-component.mjs",
+    "verifierTests": "scripts/runtime/test-state-transition-component-verifier.mjs"
+  }
+}

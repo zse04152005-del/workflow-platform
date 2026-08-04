@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "http-wrong-types",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "call",
+      "type": "http",
+      "executorVersion": 1,
+      "config": { "connectorRef": "service.primary", "method": 7 }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_call", "from": "start", "to": "call", "on": "success" },
+    { "id": "call_end", "from": "call", "to": "end", "on": "success" }
+  ]
+}

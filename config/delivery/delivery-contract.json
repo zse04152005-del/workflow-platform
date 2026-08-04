@@ -1,0 +1,10 @@
+{
+  "component": "delivery-and-release",
+  "tasks": ["G11-01", "G11-02", "G11-03", "G11-04", "G11-05", "G11-06", "G11-07", "G11-08", "G11-09", "G11-10"],
+  "local": ["compose", "initialization", "demo-tenant", "test-account", "three-example-flows"],
+  "docs": ["openapi", "dsl", "events", "sdk-examples", "error-codes", "adr", "architecture", "threat-model"],
+  "deployment": ["helm", "kustomize", "resource-limits", "pdb", "hpa", "network-policy"],
+  "release": ["immutable-sha-tag", "image-scan", "license-scan", "sbom", "signature", "migration-job", "canary", "compatibility-window"],
+  "operations": ["runbook", "backup-restore", "retention", "security", "demo-script", "release-notes"],
+  "mvpGate": "G0-G11 mandatory tasks and final evidence must be green"
+}

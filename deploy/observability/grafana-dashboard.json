@@ -1,0 +1,13 @@
+{
+  "title": "Workflow Platform Runtime",
+  "panels": [
+    { "title": "Trigger throughput", "query": "sum(rate(workflow_trigger_total[5m]))" },
+    { "title": "Queue depth", "query": "sum(queue_depth)" },
+    { "title": "Scheduler lag", "query": "max(scheduler_lag_seconds)" },
+    { "title": "Outbox pending", "query": "sum(outbox_pending)" },
+    { "title": "Lease expiry", "query": "sum(rate(lease_expired_total[5m]))" },
+    { "title": "Dead letters", "query": "sum(dead_letter_total)" }
+  ],
+  "variables": ["environment", "service"],
+  "highCardinalityLabels": []
+}

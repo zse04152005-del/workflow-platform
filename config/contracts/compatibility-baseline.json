@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G2-10",
+  "requirement": "REQ-CONTRACT-001",
+  "openapi": "api/openapi/workflow-platform.v1.openapi.json",
+  "dslSchema": "schemas/dsl/workflow-definition-v1.schema.json",
+  "eventSchema": "schemas/events/event-envelope-v1.schema.json",
+  "document": "docs/architecture/public-contracts-and-compatibility.md",
+  "policy": {
+    "api": {
+      "majorPathPrefix": "/api/v1",
+      "breakingChangeRequires": ["new-major-path", "ADR", "migration-guide"],
+      "breakingChanges": ["remove-operation", "change-operation-id", "remove-response-field", "change-field-type", "remove-enum-value", "add-required-request-field"]
+    },
+    "dsl": {
+      "immutableSchemaVersion": 1,
+      "breakingChangeRequires": ["new-schema-file", "schemaVersion-increment", "upcaster", "migration-tests"]
+    },
+    "event": {
+      "immutableSchemaVersion": 1,
+      "consumersIgnoreUnknownOptionalFields": true,
+      "breakingChangeRequires": ["new-major-or-event-type", "producer-migration", "consumer-contract-tests"]
+    }
+  },
+  "operations": [
+    { "path": "/api/v1/workflows", "method": "get", "operationId": "listWorkflows", "successStatus": "200", "requiredHeaders": [] },
+    { "path": "/api/v1/workflows", "method": "post", "operationId": "createWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}", "method": "get", "operationId": "getWorkflow", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/draft", "method": "put", "operationId": "updateWorkflowDraft", "successStatus": "200", "requiredHeaders": ["Idempotency-Key", "If-Match"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/validate", "method": "post", "operationId": "validateWorkflow", "successStatus": "200", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/publish", "method": "post", "operationId": "publishWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/clone", "method": "post", "operationId": "cloneWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/export", "method": "get", "operationId": "exportWorkflow", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/import", "method": "post", "operationId": "importWorkflow", "successStatus": "201", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/versions/diff", "method": "get", "operationId": "diffWorkflowVersions", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/workflows/{workflowId}/instances", "method": "post", "operationId": "startWorkflowInstance", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"] },
+    { "path": "/api/v1/instances", "method": "get", "operationId": "listWorkflowInstances", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}", "method": "get", "operationId": "getWorkflowInstance", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/nodes", "method": "get", "operationId": "listWorkflowInstanceNodes", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/attempts", "method": "get", "operationId": "listWorkflowInstanceAttempts", "successStatus": "200", "requiredHeaders": [], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/pause", "method": "post", "operationId": "pauseWorkflowInstance", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/resume", "method": "post", "operationId": "resumeWorkflowInstance", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/cancel", "method": "post", "operationId": "cancelWorkflowInstance", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/instances/{instanceId}/replay", "method": "post", "operationId": "replayWorkflowInstance", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/dead-letters/{deadLetterId}/notes", "method": "post", "operationId": "addDeadLetterNote", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/dead-letters/{deadLetterId}/redispatch", "method": "post", "operationId": "redispatchDeadLetter", "successStatus": "202", "requiredHeaders": ["Idempotency-Key"], "implementationStatus": "implemented" },
+    { "path": "/api/v1/tasks/inbox", "method": "get", "operationId": "listHumanTaskInbox", "successStatus": "200", "requiredHeaders": [] },
+    { "path": "/api/v1/tasks/{taskId}/decisions", "method": "post", "operationId": "decideHumanTask", "successStatus": "200", "requiredHeaders": ["Idempotency-Key"] }
+  ],
+  "schemas": {
+    "CreateWorkflowRequest": { "role": "request", "required": ["projectId", "name", "definition"], "properties": { "projectId": "$ref:UuidV7", "name": "string", "description": "string", "definition": "$ref:WorkflowDefinition" } },
+    "UpdateDraftRequest": { "role": "request", "required": ["definition"], "properties": { "definition": "$ref:WorkflowDefinition", "changeNote": "string" } },
+    "PublishWorkflowRequest": { "role": "request", "required": ["expectedDraftRevision"], "properties": { "expectedDraftRevision": "integer", "releaseNote": "string" } },
+    "CloneWorkflowRequest": { "role": "request", "required": ["targetProjectId", "name"], "properties": { "targetProjectId": "$ref:UuidV7", "name": "string", "description": "string", "sourceVersion": "integer", "resourceMappings": "array" } },
+    "ImportWorkflowRequest": { "role": "request", "required": ["targetProjectId", "name", "bundle", "resourceMappings"], "properties": { "targetProjectId": "$ref:UuidV7", "name": "string", "description": "string", "bundle": "$ref:WorkflowExportBundle", "resourceMappings": "array" } },
+    "StartWorkflowRequest": { "role": "request", "required": ["input"], "properties": { "workflowVersion": "integer", "businessKey": "string", "input": "object" } },
+    "TaskDecisionRequest": { "role": "request", "required": ["decision"], "properties": { "decision": "enum", "comment": "string", "transferToUserId": "$ref:UuidV7" }, "enums": { "decision": ["approve", "reject", "transfer"] } },
+    "AddDeadLetterNoteRequest": { "role": "request", "required": ["note"], "properties": { "note": "string" } },
+    "RedispatchDeadLetterRequest": { "role": "request", "required": ["reason"], "properties": { "reason": "string" } },
+    "DeadLetterActionAccepted": { "role": "response", "required": ["actionId", "status", "acceptedAt", "deadLetterId", "deadLetterStatus"], "properties": { "actionId": "$ref:UuidV7", "status": "string", "acceptedAt": "$ref:UtcInstant", "deadLetterId": "$ref:UuidV7", "deadLetterStatus": "enum", "targetInstanceId": "$ref:UuidV7" }, "enums": { "deadLetterStatus": ["OPEN", "REQUEUED", "RESOLVED", "DISMISSED"] } },
+    "WorkflowDetail": { "role": "response", "required": ["id", "projectId", "name", "status", "draftRevision", "definition", "createdAt", "updatedAt"], "properties": { "id": "$ref:UuidV7", "projectId": "$ref:UuidV7", "name": "string", "description": "string", "status": "enum", "draftRevision": "integer", "publishedVersion": "integer", "definition": "$ref:WorkflowDefinition", "createdAt": "$ref:UtcInstant", "updatedAt": "$ref:UtcInstant" }, "enums": { "status": ["draft", "active", "inactive"] } },
+    "WorkflowExportBundle": { "role": "response", "required": ["format", "formatVersion", "source", "workflow", "resources"], "properties": { "format": "string", "formatVersion": "integer", "source": "$ref:WorkflowExportSource", "workflow": "$ref:WorkflowExportContent", "resources": "array" } },
+    "WorkflowVersionDiff": { "role": "response", "required": ["workflowId", "from", "to", "changeCount", "truncated", "changes"], "properties": { "workflowId": "$ref:UuidV7", "from": "$ref:WorkflowVersionReference", "to": "$ref:WorkflowVersionReference", "changeCount": "integer", "truncated": "boolean", "changes": "array" } },
+    "InstanceSummary": { "role": "response", "required": ["id", "workflowId", "workflowVersion", "status", "startedAt"], "properties": { "id": "$ref:UuidV7", "workflowId": "$ref:UuidV7", "workflowVersion": "integer", "status": "enum", "businessKey": "string", "startedAt": "$ref:UtcInstant", "completedAt": "$ref:UtcInstant" }, "enums": { "status": ["pending", "running", "paused", "succeeded", "failed", "cancelled"] } },
+    "TaskSummary": { "role": "response", "required": ["id", "instanceId", "nodeId", "status", "createdAt"], "properties": { "id": "$ref:UuidV7", "instanceId": "$ref:UuidV7", "nodeId": "string", "status": "enum", "candidateRole": "string", "assigneeUserId": "$ref:UuidV7", "deadlineAt": "$ref:UtcInstant", "createdAt": "$ref:UtcInstant" }, "enums": { "status": ["open", "decided", "timed_out", "cancelled"] } }
+  },
+  "dsl": {
+    "required": ["schemaVersion", "name", "catalogVersion", "triggers", "nodes", "edges"],
+    "nodeTypes": ["start", "end", "http", "condition", "delay", "human_task"],
+    "triggerTypes": ["manual", "http", "cron"]
+  },
+  "eventEnvelope": {
+    "required": ["eventId", "eventType", "occurredAt", "tenantId", "traceId", "schemaVersion", "payload"],
+    "additionalProperties": true
+  }
+}

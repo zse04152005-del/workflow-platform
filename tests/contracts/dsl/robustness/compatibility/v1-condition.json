@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "name": "compat-condition",
+  "catalogVersion": 1,
+  "triggers": [
+    { "id": "manual", "type": "manual" }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "decision",
+      "type": "condition",
+      "executorVersion": 1,
+      "config": { "expression": "input.approved == true" }
+    },
+    { "id": "approved", "type": "end", "executorVersion": 1 },
+    { "id": "fallback", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_decision", "from": "start", "to": "decision", "on": "success" },
+    {
+      "id": "decision_approved",
+      "from": "decision",
+      "to": "approved",
+      "on": "condition",
+      "when": "input.approved == true"
+    },
+    { "id": "decision_fallback", "from": "decision", "to": "fallback", "on": "always" }
+  ],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "approved": { "type": "boolean" }
+    },
+    "additionalProperties": false
+  }
+}

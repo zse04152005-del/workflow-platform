@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-02",
+  "requirement": "REQ-DSL-001",
+  "module": "definition",
+  "formats": ["json", "yaml"],
+  "input": {
+    "encoding": "UTF-8",
+    "minimumBytes": 1,
+    "maximumBytes": 1048576,
+    "optionalUtf8Bom": true,
+    "documentsExactly": 1,
+    "rootType": "object",
+    "duplicateKeysAllowed": false
+  },
+  "streamConstraints": {
+    "maximumNestingDepth": 64,
+    "maximumDocumentCharacters": 1048576,
+    "maximumTokenCount": 200000,
+    "maximumNumberLength": 100,
+    "maximumStringLength": 262144,
+    "maximumNameLength": 200
+  },
+  "yaml": {
+    "allowDuplicateKeys": false,
+    "booleanLikeWords": "strings",
+    "maximumAliasesForCollections": 0,
+    "allowRecursiveKeys": false,
+    "mergeOnCompose": false,
+    "allowCustomGlobalTags": false,
+    "codePointLimit": 1048576,
+    "nestingDepthLimit": 64
+  },
+  "normalization": {
+    "algorithm": "workflow-canonical-json-v1",
+    "objectKeyOrder": "java-string-natural-order",
+    "arrayOrder": "preserve-source-order",
+    "mappingOrder": "canonical-object-key-order",
+    "numbers": "arbitrary-precision-strip-trailing-zero-plain-decimal",
+    "negativeZero": "zero",
+    "whitespace": "none",
+    "unicodeNormalization": "none",
+    "encoding": "UTF-8",
+    "maximumCanonicalBytes": 1048576
+  },
+  "checksum": {
+    "algorithm": "SHA-256",
+    "input": "canonical-UTF-8-json-bytes",
+    "encoding": "lowercase-hex",
+    "pattern": "^[0-9a-f]{64}$"
+  },
+  "failureCodes": [
+    "empty_input",
+    "input_too_large",
+    "invalid_utf8",
+    "malformed_document",
+    "resource_limit_exceeded",
+    "multiple_documents",
+    "root_not_object",
+    "core_model_invalid",
+    "canonical_output_too_large"
+  ],
+  "modelBinding": {
+    "javaType": "com.workflowplatform.contracts.dsl.WorkflowDefinition",
+    "preserveUnknownSourceFieldsInCanonicalJson": true,
+    "graphSemanticsValidated": false,
+    "nodeSpecificSchemasValidated": false,
+    "expressionSemanticsValidated": false
+  },
+  "deferred": {
+    "G3-03": "unique start, unique IDs, reachability, edge references and cycle rules",
+    "G3-04": "node-specific parameter types and connector/secret authorization",
+    "G3-05": "CEL/JSONPath grammar, type checking and resource sandbox",
+    "G3-10": "parser property, compatibility and malicious-input suite"
+  },
+  "sourceBindings": {
+    "javaPackage": "control-plane/src/main/java/com/workflowplatform/controlplane/definition",
+    "javaTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowDefinitionParserTests.java",
+    "fixtures": "tests/contracts/dsl/parser",
+    "verifier": "scripts/dsl/verify-dsl-parser-normalization.mjs",
+    "verifierTests": "scripts/dsl/test-dsl-parser-normalization-verifier.mjs"
+  },
+  "document": "docs/architecture/dsl-parser-normalization.md"
+}

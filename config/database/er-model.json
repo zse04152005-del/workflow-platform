@@ -1,0 +1,946 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.4.0",
+  "reviewedOn": "2026-07-30",
+  "task": "G2-03",
+  "database": "PostgreSQL 18",
+  "idStrategy": "RFC9562-UUIDv7",
+  "timeStrategy": "timestamptz(6)-UTC",
+  "columnProfiles": {
+    "uuid-pk": [
+      { "name": "id", "type": "uuid", "nullable": false, "primaryKey": true }
+    ],
+    "tenant-required": [
+      { "name": "tenant_id", "type": "uuid", "nullable": false }
+    ],
+    "tenant-optional": [
+      { "name": "tenant_id", "type": "uuid", "nullable": true }
+    ],
+    "mutable-audit": [
+      { "name": "created_at", "type": "timestamptz(6)", "nullable": false, "default": "transaction_timestamp()" },
+      { "name": "created_by", "type": "varchar(255)", "nullable": false },
+      { "name": "updated_at", "type": "timestamptz(6)", "nullable": false, "default": "transaction_timestamp()" },
+      { "name": "updated_by", "type": "varchar(255)", "nullable": false },
+      { "name": "version", "type": "bigint", "nullable": false, "default": "0" }
+    ],
+    "immutable-audit": [
+      { "name": "created_at", "type": "timestamptz(6)", "nullable": false, "default": "transaction_timestamp()" },
+      { "name": "created_by", "type": "varchar(255)", "nullable": false }
+    ],
+    "soft-delete": [
+      { "name": "deleted_at", "type": "timestamptz(6)", "nullable": true },
+      { "name": "deleted_by", "type": "varchar(255)", "nullable": true },
+      { "name": "deletion_reason", "type": "varchar(500)", "nullable": true }
+    ],
+    "revocation": [
+      { "name": "revoked_at", "type": "timestamptz(6)", "nullable": true },
+      { "name": "revoked_by", "type": "varchar(255)", "nullable": true },
+      { "name": "revocation_reason", "type": "varchar(500)", "nullable": true }
+    ]
+  },
+  "migrationGroups": {
+    "G2-04": ["tenant", "project", "membership", "role", "role_binding"],
+    "G2-05": ["workflow_definition", "workflow_version", "trigger_config", "connector", "secret_reference"],
+    "G2-06": ["workflow_instance", "node_instance", "task_execution", "schedule_occurrence"],
+    "G2-07": ["outbox_event", "processed_event", "idempotency_record", "dead_letter", "worker_lease"],
+    "G2-08": ["human_task", "audit_log", "quota_usage"]
+  },
+  "tables": [
+    {
+      "name": "tenant",
+      "owner": "tenant",
+      "migrationTask": "G2-04",
+      "tenantScope": "self",
+      "profiles": ["uuid-pk", "mutable-audit"],
+      "columns": [
+        { "name": "name", "type": "varchar(120)", "nullable": false },
+        { "name": "normalized_name", "type": "varchar(120)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false },
+        { "name": "quota_config", "type": "jsonb", "nullable": false, "default": "'{}'::jsonb" }
+      ],
+      "foreignKeys": [],
+      "uniqueConstraints": [
+        { "name": "uq_tenant_normalized_name", "columns": ["normalized_name"] }
+      ],
+      "checks": [
+        { "name": "ck_tenant_status", "expression": "status IN ('ACTIVE','SUSPENDED','DEACTIVATED')" },
+        { "name": "ck_tenant_version", "expression": "version >= 0" }
+      ],
+      "indexes": [
+        { "name": "idx_tenant_status_id", "columns": ["status", "id"], "purpose": "platform tenant administration" }
+      ],
+      "rls": { "enabled": true, "policy": "id = app_tenant_id() OR app_is_platform_admin()" },
+      "deletionStrategy": "lifecycle-status",
+      "partitioning": { "mode": "none-mvp", "reason": "small governance aggregate" },
+      "retention": "preserve tenant tombstone and references"
+    },
+    {
+      "name": "project",
+      "owner": "tenant",
+      "migrationTask": "G2-04",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "name", "type": "varchar(120)", "nullable": false },
+        { "name": "normalized_name", "type": "varchar(120)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_project_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_project_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_project_tenant_name", "columns": ["tenant_id", "normalized_name"] }
+      ],
+      "checks": [
+        { "name": "ck_project_status", "expression": "status IN ('ACTIVE','ARCHIVED')" },
+        { "name": "ck_project_version", "expression": "version >= 0" }
+      ],
+      "indexes": [
+        { "name": "idx_project_tenant_status_id", "columns": ["tenant_id", "status", "id"], "purpose": "tenant project list" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "lifecycle-status",
+      "partitioning": { "mode": "none-mvp", "reason": "small governance aggregate" },
+      "retention": "preserve while referenced"
+    },
+    {
+      "name": "membership",
+      "owner": "tenant",
+      "migrationTask": "G2-04",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit", "revocation"],
+      "columns": [
+        { "name": "project_id", "type": "uuid", "nullable": true },
+        { "name": "principal_subject", "type": "varchar(255)", "nullable": false },
+        { "name": "scope_type", "type": "varchar(32)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_membership_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_membership_project", "columns": ["tenant_id", "project_id"], "targetTable": "project", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_membership_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_membership_scope_subject", "columns": ["tenant_id", "project_id", "principal_subject"], "nullsNotDistinct": true }
+      ],
+      "checks": [
+        { "name": "ck_membership_scope", "expression": "(scope_type='TENANT' AND project_id IS NULL) OR (scope_type='PROJECT' AND project_id IS NOT NULL)" },
+        { "name": "ck_membership_status", "expression": "status IN ('ACTIVE','REVOKED')" }
+      ],
+      "indexes": [
+        { "name": "idx_membership_project", "columns": ["tenant_id", "project_id", "status"], "purpose": "project member list and composite FK" },
+        { "name": "idx_membership_subject", "columns": ["tenant_id", "principal_subject", "status"], "purpose": "OIDC subject authorization lookup" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "revocation",
+      "partitioning": { "mode": "none-mvp", "reason": "authorization history remains bounded" },
+      "retention": "retain revocation history"
+    },
+    {
+      "name": "role",
+      "owner": "tenant",
+      "migrationTask": "G2-04",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "code", "type": "varchar(80)", "nullable": false },
+        { "name": "name", "type": "varchar(120)", "nullable": false },
+        { "name": "permission_codes", "type": "text[]", "nullable": false },
+        { "name": "system_role", "type": "boolean", "nullable": false, "default": "false" },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_role_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_role_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_role_tenant_code", "columns": ["tenant_id", "code"] }
+      ],
+      "checks": [
+        { "name": "ck_role_code", "expression": "code ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_role_status", "expression": "status IN ('ACTIVE','DEACTIVATED')" }
+      ],
+      "indexes": [
+        { "name": "idx_role_tenant_status", "columns": ["tenant_id", "status", "code"], "purpose": "role management" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "lifecycle-status",
+      "partitioning": { "mode": "none-mvp", "reason": "small authorization aggregate" },
+      "retention": "preserve referenced roles"
+    },
+    {
+      "name": "role_binding",
+      "owner": "tenant",
+      "migrationTask": "G2-04",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit", "revocation"],
+      "columns": [
+        { "name": "membership_id", "type": "uuid", "nullable": false },
+        { "name": "role_id", "type": "uuid", "nullable": false },
+        { "name": "scope_type", "type": "varchar(32)", "nullable": false },
+        { "name": "scope_id", "type": "uuid", "nullable": true },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_role_binding_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_role_binding_membership", "columns": ["tenant_id", "membership_id"], "targetTable": "membership", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" },
+        { "name": "fk_role_binding_role", "columns": ["tenant_id", "role_id"], "targetTable": "role", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_role_binding_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_role_binding_assignment", "columns": ["tenant_id", "membership_id", "role_id", "scope_type", "scope_id"], "nullsNotDistinct": true }
+      ],
+      "checks": [
+        { "name": "ck_role_binding_scope", "expression": "(scope_type='TENANT' AND scope_id IS NULL) OR (scope_type='PROJECT' AND scope_id IS NOT NULL)" },
+        { "name": "ck_role_binding_status", "expression": "status IN ('ACTIVE','REVOKED')" }
+      ],
+      "indexes": [
+        { "name": "idx_role_binding_membership", "columns": ["tenant_id", "membership_id", "status"], "purpose": "authorization lookup and composite FK" },
+        { "name": "idx_role_binding_role", "columns": ["tenant_id", "role_id", "status"], "purpose": "role impact analysis and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "revocation",
+      "partitioning": { "mode": "none-mvp", "reason": "authorization history remains bounded" },
+      "retention": "retain revocation history"
+    },
+    {
+      "name": "workflow_definition",
+      "owner": "definition",
+      "migrationTask": "G2-05",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "project_id", "type": "uuid", "nullable": false },
+        { "name": "name", "type": "varchar(160)", "nullable": false },
+        { "name": "normalized_name", "type": "varchar(160)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false },
+        { "name": "draft_dsl", "type": "jsonb", "nullable": false },
+        { "name": "draft_revision", "type": "bigint", "nullable": false, "default": "0" },
+        { "name": "draft_checksum", "type": "char(64)", "nullable": false },
+        { "name": "description", "type": "varchar(1000)", "nullable": true, "introducedIn": "G3-06" }
+      ],
+      "foreignKeys": [
+        { "name": "fk_workflow_definition_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_workflow_definition_project", "columns": ["tenant_id", "project_id"], "targetTable": "project", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_workflow_definition_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_workflow_definition_project_name", "columns": ["tenant_id", "project_id", "normalized_name"] }
+      ],
+      "checks": [
+        { "name": "ck_workflow_definition_status", "expression": "status IN ('DRAFT','ACTIVE','DEACTIVATED')" },
+        { "name": "ck_workflow_definition_revision", "expression": "draft_revision >= 0 AND version >= 0" },
+        { "name": "ck_workflow_definition_dsl_object", "expression": "jsonb_typeof(draft_dsl) = 'object'" },
+        { "name": "ck_workflow_definition_checksum", "expression": "draft_checksum ~ '^[0-9a-f]{64}$'" }
+      ],
+      "indexes": [
+        { "name": "idx_workflow_definition_project", "columns": ["tenant_id", "project_id", "status", "id"], "purpose": "definition list and composite FK" },
+        { "name": "idx_workflow_definition_updated", "columns": ["tenant_id", "updated_at", "id"], "order": "DESC,DESC", "purpose": "stable recent definition cursor" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "lifecycle-status",
+      "partitioning": { "mode": "none-mvp", "reason": "definition aggregates are small" },
+      "retention": "preserve while versions or instances reference definition"
+    },
+    {
+      "name": "workflow_version",
+      "owner": "definition",
+      "migrationTask": "G2-05",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "immutable-audit"],
+      "columns": [
+        { "name": "definition_id", "type": "uuid", "nullable": false },
+        { "name": "version_no", "type": "integer", "nullable": false },
+        { "name": "schema_version", "type": "integer", "nullable": false },
+        { "name": "dsl", "type": "jsonb", "nullable": false },
+        { "name": "checksum", "type": "char(64)", "nullable": false },
+        { "name": "executor_catalog_version", "type": "varchar(80)", "nullable": false },
+        { "name": "published_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "published_by", "type": "varchar(255)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_workflow_version_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_workflow_version_definition", "columns": ["tenant_id", "definition_id"], "targetTable": "workflow_definition", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_workflow_version_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_workflow_version_number", "columns": ["tenant_id", "definition_id", "version_no"] },
+        { "name": "uq_workflow_version_checksum", "columns": ["tenant_id", "definition_id", "checksum"] },
+        { "name": "uq_workflow_version_instance_binding", "columns": ["tenant_id", "id", "definition_id"], "introducedIn": "G2-06" }
+      ],
+      "checks": [
+        { "name": "ck_workflow_version_numbers", "expression": "version_no > 0 AND schema_version > 0" },
+        { "name": "ck_workflow_version_dsl_object", "expression": "jsonb_typeof(dsl) = 'object'" },
+        { "name": "ck_workflow_version_checksum_format", "expression": "checksum ~ '^[0-9a-f]{64}$'" },
+        { "name": "ck_workflow_version_publish_time", "expression": "published_at >= created_at" }
+      ],
+      "indexes": [
+        { "name": "idx_workflow_version_definition", "columns": ["tenant_id", "definition_id", "version_no"], "order": "ASC,ASC,DESC", "purpose": "version list and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "immutable-history",
+      "partitioning": { "mode": "none-mvp", "reason": "immutable versions remain bounded per definition" },
+      "retention": "never delete while any instance or compliance rule references version"
+    },
+    {
+      "name": "trigger_config",
+      "owner": "definition",
+      "migrationTask": "G2-05",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "immutable-audit"],
+      "columns": [
+        { "name": "workflow_version_id", "type": "uuid", "nullable": false },
+        { "name": "trigger_key", "type": "varchar(80)", "nullable": false },
+        { "name": "trigger_type", "type": "varchar(40)", "nullable": false },
+        { "name": "config", "type": "jsonb", "nullable": false },
+        { "name": "timezone", "type": "varchar(80)", "nullable": true },
+        { "name": "misfire_policy", "type": "varchar(40)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_trigger_config_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_trigger_config_version", "columns": ["tenant_id", "workflow_version_id"], "targetTable": "workflow_version", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_trigger_config_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_trigger_config_version_key", "columns": ["tenant_id", "workflow_version_id", "trigger_key"] },
+        { "name": "uq_trigger_config_schedule_binding", "columns": ["tenant_id", "id", "timezone", "misfire_policy"], "introducedIn": "G2-06" }
+      ],
+      "checks": [
+        { "name": "ck_trigger_config_key", "expression": "trigger_key ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_trigger_config_type", "expression": "trigger_type IN ('manual','http','cron')" },
+        { "name": "ck_trigger_config_cron", "expression": "(trigger_type = 'cron' AND timezone IS NOT NULL AND btrim(timezone) <> '' AND misfire_policy IN ('skip','fire_once','catch_up_limited')) OR (trigger_type <> 'cron' AND timezone IS NULL AND misfire_policy IS NULL)" },
+        { "name": "ck_trigger_config_object", "expression": "jsonb_typeof(config) = 'object'" }
+      ],
+      "indexes": [
+        { "name": "idx_trigger_config_version", "columns": ["tenant_id", "workflow_version_id", "trigger_type"], "purpose": "version trigger lookup and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "immutable-history",
+      "partitioning": { "mode": "none-mvp", "reason": "version-bound immutable configuration" },
+      "retention": "same as workflow_version"
+    },
+    {
+      "name": "connector",
+      "owner": "definition",
+      "migrationTask": "G2-05",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit", "soft-delete"],
+      "columns": [
+        { "name": "project_id", "type": "uuid", "nullable": true },
+        { "name": "name", "type": "varchar(120)", "nullable": false },
+        { "name": "normalized_name", "type": "varchar(120)", "nullable": false },
+        { "name": "connector_type", "type": "varchar(40)", "nullable": false },
+        { "name": "endpoint", "type": "varchar(2048)", "nullable": false },
+        { "name": "config", "type": "jsonb", "nullable": false, "default": "'{}'::jsonb" },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_connector_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_connector_project", "columns": ["tenant_id", "project_id"], "targetTable": "project", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_connector_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_connector_active_name", "columns": ["tenant_id", "project_id", "normalized_name"], "nullsNotDistinct": true, "predicate": "deleted_at IS NULL" }
+      ],
+      "checks": [
+        { "name": "ck_connector_type", "expression": "connector_type ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_connector_config_object", "expression": "jsonb_typeof(config) = 'object'" },
+        { "name": "ck_connector_endpoint", "expression": "btrim(endpoint) <> ''" },
+        { "name": "ck_connector_status", "expression": "status IN ('ACTIVE','DISABLED')" },
+        { "name": "ck_connector_delete_fields", "expression": "(deleted_at IS NULL AND deleted_by IS NULL AND deletion_reason IS NULL) OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND btrim(deleted_by) <> '' AND deletion_reason IS NOT NULL AND btrim(deletion_reason) <> '')" }
+      ],
+      "indexes": [
+        { "name": "idx_connector_project", "columns": ["tenant_id", "project_id", "status"], "predicate": "deleted_at IS NULL", "purpose": "connector list and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "soft-delete",
+      "partitioning": { "mode": "none-mvp", "reason": "small configuration aggregate" },
+      "retention": "retain tombstone through reference window"
+    },
+    {
+      "name": "secret_reference",
+      "owner": "security",
+      "migrationTask": "G2-05",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit", "soft-delete"],
+      "columns": [
+        { "name": "project_id", "type": "uuid", "nullable": true },
+        { "name": "name", "type": "varchar(120)", "nullable": false },
+        { "name": "normalized_name", "type": "varchar(120)", "nullable": false },
+        { "name": "provider", "type": "varchar(40)", "nullable": false },
+        { "name": "external_key", "type": "varchar(512)", "nullable": true, "sensitive": true },
+        { "name": "ciphertext", "type": "bytea", "nullable": true, "sensitive": true },
+        { "name": "key_version", "type": "varchar(80)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_secret_reference_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_secret_reference_project", "columns": ["tenant_id", "project_id"], "targetTable": "project", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_secret_reference_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_secret_reference_active_name", "columns": ["tenant_id", "project_id", "normalized_name"], "nullsNotDistinct": true, "predicate": "deleted_at IS NULL" }
+      ],
+      "checks": [
+        { "name": "ck_secret_reference_provider", "expression": "provider ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_secret_reference_material", "expression": "(provider='local' AND ciphertext IS NOT NULL AND octet_length(ciphertext) > 0 AND external_key IS NULL) OR (provider<>'local' AND external_key IS NOT NULL AND btrim(external_key) <> '' AND ciphertext IS NULL)" },
+        { "name": "ck_secret_reference_key_version", "expression": "btrim(key_version) <> ''" },
+        { "name": "ck_secret_reference_status", "expression": "status IN ('ACTIVE','DISABLED','ROTATION_REQUIRED')" },
+        { "name": "ck_secret_reference_delete_fields", "expression": "(deleted_at IS NULL AND deleted_by IS NULL AND deletion_reason IS NULL) OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND btrim(deleted_by) <> '' AND deletion_reason IS NOT NULL AND btrim(deletion_reason) <> '')" }
+      ],
+      "indexes": [
+        { "name": "idx_secret_reference_project", "columns": ["tenant_id", "project_id", "status"], "predicate": "deleted_at IS NULL", "purpose": "authorized secret reference lookup and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "soft-delete",
+      "partitioning": { "mode": "none-mvp", "reason": "small sensitive configuration aggregate" },
+      "retention": "retain encrypted tombstone metadata; purge ciphertext by key policy"
+    },
+    {
+      "name": "workflow_instance",
+      "owner": "runtime",
+      "migrationTask": "G2-06",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "definition_id", "type": "uuid", "nullable": false },
+        { "name": "workflow_version_id", "type": "uuid", "nullable": false },
+        { "name": "business_key", "type": "varchar(200)", "nullable": true },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "input_payload", "type": "jsonb", "nullable": true, "sensitive": true, "introducedIn": "G4-04" },
+        { "name": "input_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "input_digest", "type": "char(64)", "nullable": false },
+        { "name": "started_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "completed_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "trace_id", "type": "varchar(32)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_workflow_instance_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_workflow_instance_definition", "columns": ["tenant_id", "definition_id"], "targetTable": "workflow_definition", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" },
+        { "name": "fk_workflow_instance_version", "columns": ["tenant_id", "workflow_version_id", "definition_id"], "targetTable": "workflow_version", "targetColumns": ["tenant_id", "id", "definition_id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_workflow_instance_tenant_id_id", "columns": ["tenant_id", "id"] }
+      ],
+      "checks": [
+        { "name": "ck_workflow_instance_status", "expression": "status IN ('CREATED','RUNNING','PAUSE_REQUESTED','PAUSED','CANCEL_REQUESTED','CANCELLED','SUCCEEDED','FAILED')" },
+        { "name": "ck_workflow_instance_state_times", "expression": "(status = 'CREATED' AND started_at IS NULL AND completed_at IS NULL) OR (status IN ('RUNNING','PAUSE_REQUESTED','PAUSED','CANCEL_REQUESTED') AND started_at IS NOT NULL AND completed_at IS NULL) OR (status IN ('CANCELLED','SUCCEEDED','FAILED') AND started_at IS NOT NULL AND completed_at IS NOT NULL)" },
+        { "name": "ck_workflow_instance_time_order", "expression": "updated_at >= created_at AND (started_at IS NULL OR started_at >= created_at) AND (completed_at IS NULL OR completed_at >= started_at)" },
+        { "name": "ck_workflow_instance_input_digest", "expression": "input_digest ~ '^[0-9a-f]{64}$'" },
+        { "name": "ck_workflow_instance_trace_id", "expression": "trace_id ~ '^[0-9a-f]{32}$' AND trace_id <> repeat('0', 32)" },
+        { "name": "ck_workflow_instance_optional_text", "expression": "(business_key IS NULL OR btrim(business_key) <> '') AND (input_ref IS NULL OR btrim(input_ref) <> '')" },
+        { "name": "ck_workflow_instance_version", "expression": "version >= 0" },
+        { "name": "ck_workflow_instance_input_payload", "expression": "input_payload IS NULL OR jsonb_typeof(input_payload) = 'object'", "introducedIn": "G4-04" }
+      ],
+      "indexes": [
+        { "name": "idx_workflow_instance_tenant_created", "columns": ["tenant_id", "created_at", "id"], "order": "ASC,DESC,DESC", "purpose": "stable instance cursor" },
+        { "name": "idx_workflow_instance_business_key", "columns": ["tenant_id", "business_key", "created_at", "id"], "predicate": "business_key IS NOT NULL", "purpose": "business correlation search" },
+        { "name": "idx_workflow_instance_status", "columns": ["tenant_id", "status", "updated_at", "id"], "purpose": "operations status filter" },
+        { "name": "idx_workflow_instance_definition", "columns": ["tenant_id", "definition_id", "created_at"], "purpose": "definition history and composite FK" },
+        { "name": "idx_workflow_instance_version", "columns": ["tenant_id", "workflow_version_id", "definition_id", "created_at"], "purpose": "definition-consistent version history and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "created_at", "activateWhen": "measured history volume requires partition pruning; validate FK/unique redesign first" },
+      "retention": "hot query window then archive/purge by tenant policy"
+    },
+    {
+      "name": "node_instance",
+      "owner": "runtime",
+      "migrationTask": "G2-06",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "workflow_instance_id", "type": "uuid", "nullable": false },
+        { "name": "node_id", "type": "varchar(120)", "nullable": false },
+        { "name": "node_type", "type": "varchar(40)", "nullable": false },
+        { "name": "config_snapshot", "type": "jsonb", "nullable": false, "default": "'{}'::jsonb", "introducedIn": "G4-10" },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "attempt_no", "type": "integer", "nullable": false, "default": "0" },
+        { "name": "dispatch_count", "type": "integer", "nullable": false, "default": "0" },
+        { "name": "lease_generation", "type": "bigint", "nullable": false, "default": "0" },
+        { "name": "next_schedule_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "current_worker_id", "type": "varchar(160)", "nullable": true },
+        { "name": "lease_expire_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "output_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "output_digest", "type": "char(64)", "nullable": true },
+        { "name": "error_code", "type": "varchar(120)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_node_instance_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_node_instance_workflow", "columns": ["tenant_id", "workflow_instance_id"], "targetTable": "workflow_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_node_instance_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_node_instance_workflow_node", "columns": ["tenant_id", "workflow_instance_id", "node_id"] }
+      ],
+      "checks": [
+        { "name": "ck_node_instance_status", "expression": "status IN ('PENDING','READY','DISPATCHED','RUNNING','RETRY_WAIT','WAITING_TIMER','WAITING_APPROVAL','SUCCEEDED','FAILED','CANCELLED')" },
+        { "name": "ck_node_instance_identity", "expression": "btrim(node_id) <> '' AND node_type ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_node_instance_counters", "expression": "attempt_no >= 0 AND dispatch_count >= 0 AND lease_generation >= 0 AND version >= 0" },
+        { "name": "ck_node_instance_schedule", "expression": "(status IN ('READY','RETRY_WAIT','WAITING_TIMER') AND next_schedule_at IS NOT NULL AND next_schedule_at >= updated_at) OR (status NOT IN ('READY','RETRY_WAIT','WAITING_TIMER') AND next_schedule_at IS NULL)" },
+        { "name": "ck_node_instance_lease", "expression": "(status IN ('DISPATCHED','RUNNING') AND current_worker_id IS NOT NULL AND btrim(current_worker_id) <> '' AND lease_expire_at IS NOT NULL AND lease_expire_at > updated_at) OR (status NOT IN ('DISPATCHED','RUNNING') AND current_worker_id IS NULL AND lease_expire_at IS NULL)" },
+        { "name": "ck_node_instance_output", "expression": "(output_ref IS NULL AND output_digest IS NULL) OR (output_ref IS NOT NULL AND btrim(output_ref) <> '' AND output_digest ~ '^[0-9a-f]{64}$')" },
+        { "name": "ck_node_instance_error", "expression": "(status IN ('FAILED','RETRY_WAIT') AND error_code IS NOT NULL AND btrim(error_code) <> '') OR (status NOT IN ('FAILED','RETRY_WAIT') AND error_code IS NULL)" },
+        { "name": "ck_node_instance_audit_time", "expression": "updated_at >= created_at" },
+        { "name": "ck_node_instance_config_snapshot", "expression": "jsonb_typeof(config_snapshot) = 'object'", "introducedIn": "G4-10" }
+      ],
+      "indexes": [
+        { "name": "idx_node_instance_workflow", "columns": ["tenant_id", "workflow_instance_id", "node_id"], "purpose": "instance detail and composite FK" },
+        { "name": "idx_node_instance_schedule", "columns": ["tenant_id", "status", "next_schedule_at", "id"], "predicate": "status IN ('READY','RETRY_WAIT','WAITING_TIMER')", "purpose": "tenant-scoped concurrent scheduler due scan" },
+        { "name": "idx_node_instance_lease_expiry", "columns": ["tenant_id", "lease_expire_at", "id"], "predicate": "status IN ('DISPATCHED','RUNNING')", "purpose": "tenant-scoped expired lease recovery" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); worker uses constrained service policy" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "none-mvp", "reason": "keep FK and scheduler indexes simple; archive with parent instance" },
+      "retention": "same lifecycle as workflow_instance"
+    },
+    {
+      "name": "task_execution",
+      "owner": "runtime",
+      "migrationTask": "G2-06",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "node_instance_id", "type": "uuid", "nullable": false },
+        { "name": "attempt_no", "type": "integer", "nullable": false },
+        { "name": "execution_id", "type": "uuid", "nullable": false },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "started_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "finished_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "input_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "input_digest", "type": "char(64)", "nullable": false },
+        { "name": "output_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "output_digest", "type": "char(64)", "nullable": true },
+        { "name": "error_code", "type": "varchar(120)", "nullable": true },
+        { "name": "error_summary_redacted", "type": "varchar(2000)", "nullable": true, "sensitive": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_task_execution_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_task_execution_node", "columns": ["tenant_id", "node_instance_id"], "targetTable": "node_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_task_execution_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_task_execution_dead_letter_binding", "columns": ["tenant_id", "id", "node_instance_id"], "introducedIn": "G2-07" },
+        { "name": "uq_task_execution_node_attempt", "columns": ["tenant_id", "node_instance_id", "attempt_no"] },
+        { "name": "uq_task_execution_execution_id", "columns": ["tenant_id", "execution_id"] }
+      ],
+      "checks": [
+        { "name": "ck_task_execution_attempt", "expression": "attempt_no > 0 AND version >= 0" },
+        { "name": "ck_task_execution_status", "expression": "status IN ('RUNNING','SUCCEEDED','FAILED','TIMED_OUT','ABANDONED','CANCELLED')" },
+        { "name": "ck_task_execution_state_fields", "expression": "(status = 'RUNNING' AND finished_at IS NULL AND output_ref IS NULL AND output_digest IS NULL AND error_code IS NULL AND error_summary_redacted IS NULL) OR (status = 'SUCCEEDED' AND finished_at IS NOT NULL AND error_code IS NULL AND error_summary_redacted IS NULL) OR (status IN ('FAILED','TIMED_OUT','ABANDONED','CANCELLED') AND finished_at IS NOT NULL AND error_code IS NOT NULL AND btrim(error_code) <> '' AND error_summary_redacted IS NOT NULL AND btrim(error_summary_redacted) <> '')" },
+        { "name": "ck_task_execution_time_order", "expression": "updated_at >= created_at AND started_at >= created_at AND (finished_at IS NULL OR finished_at >= started_at)" },
+        { "name": "ck_task_execution_input", "expression": "input_digest ~ '^[0-9a-f]{64}$' AND (input_ref IS NULL OR btrim(input_ref) <> '')" },
+        { "name": "ck_task_execution_output", "expression": "(output_ref IS NULL AND output_digest IS NULL) OR (output_ref IS NOT NULL AND btrim(output_ref) <> '' AND output_digest ~ '^[0-9a-f]{64}$')" }
+      ],
+      "indexes": [
+        { "name": "idx_task_execution_node", "columns": ["tenant_id", "node_instance_id", "attempt_no"], "order": "ASC,ASC,DESC", "purpose": "attempt history and composite FK" },
+        { "name": "idx_task_execution_status", "columns": ["tenant_id", "status", "started_at", "id"], "purpose": "running/failed attempt operations" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); worker uses constrained service policy" },
+      "deletionStrategy": "immutable-history",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "created_at", "activateWhen": "measured attempt volume justifies partitioning; terminal rows become append-only" },
+      "retention": "partition archive after instance retention and replay window"
+    },
+    {
+      "name": "schedule_occurrence",
+      "owner": "scheduler",
+      "migrationTask": "G2-06",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "trigger_config_id", "type": "uuid", "nullable": false },
+        { "name": "scheduled_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "timezone", "type": "varchar(80)", "nullable": false },
+        { "name": "misfire_policy", "type": "varchar(40)", "nullable": false },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "workflow_instance_id", "type": "uuid", "nullable": true },
+        { "name": "claimed_at", "type": "timestamptz(6)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_schedule_occurrence_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_schedule_occurrence_trigger", "columns": ["tenant_id", "trigger_config_id", "timezone", "misfire_policy"], "targetTable": "trigger_config", "targetColumns": ["tenant_id", "id", "timezone", "misfire_policy"], "onDelete": "RESTRICT" },
+        { "name": "fk_schedule_occurrence_instance", "columns": ["tenant_id", "workflow_instance_id"], "targetTable": "workflow_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_schedule_occurrence_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_schedule_occurrence_trigger_time", "columns": ["tenant_id", "trigger_config_id", "scheduled_at"] }
+      ],
+      "checks": [
+        { "name": "ck_schedule_occurrence_status", "expression": "status IN ('PENDING','CLAIMED','FIRED','SKIPPED','FAILED')" },
+        { "name": "ck_schedule_occurrence_state_fields", "expression": "(status = 'PENDING' AND claimed_at IS NULL AND workflow_instance_id IS NULL) OR (status = 'CLAIMED' AND claimed_at IS NOT NULL AND workflow_instance_id IS NULL) OR (status = 'FIRED' AND claimed_at IS NOT NULL AND workflow_instance_id IS NOT NULL) OR (status IN ('SKIPPED','FAILED') AND claimed_at IS NOT NULL AND workflow_instance_id IS NULL)" },
+        { "name": "ck_schedule_occurrence_claim_time", "expression": "claimed_at IS NULL OR claimed_at >= scheduled_at" },
+        { "name": "ck_schedule_occurrence_snapshot", "expression": "btrim(timezone) <> '' AND misfire_policy IN ('skip','fire_once','catch_up_limited')" },
+        { "name": "ck_schedule_occurrence_audit", "expression": "updated_at >= created_at AND version >= 0" }
+      ],
+      "indexes": [
+        { "name": "idx_schedule_occurrence_due", "columns": ["tenant_id", "status", "scheduled_at", "id"], "predicate": "status='PENDING'", "purpose": "tenant-scoped concurrent Cron due scan" },
+        { "name": "idx_schedule_occurrence_trigger", "columns": ["tenant_id", "trigger_config_id", "timezone", "misfire_policy", "scheduled_at"], "order": "ASC,ASC,ASC,ASC,DESC", "purpose": "Cron snapshot history and composite FK" },
+        { "name": "idx_schedule_occurrence_instance", "columns": ["tenant_id", "workflow_instance_id"], "predicate": "workflow_instance_id IS NOT NULL", "purpose": "instance correlation and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); scheduler uses constrained service policy" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "scheduled_at", "activateWhen": "Cron occurrence history crosses measured threshold" },
+      "retention": "retain past maximum catch-up/recovery window, then archive/purge"
+    },
+    {
+      "name": "outbox_event",
+      "owner": "control-plane-platform-adapter",
+      "migrationTask": "G2-07",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "immutable-audit"],
+      "columns": [
+        { "name": "aggregate_type", "type": "varchar(80)", "nullable": false },
+        { "name": "aggregate_id", "type": "uuid", "nullable": false },
+        { "name": "event_type", "type": "varchar(160)", "nullable": false },
+        { "name": "schema_version", "type": "integer", "nullable": false },
+        { "name": "partition_key", "type": "varchar(200)", "nullable": false },
+        { "name": "payload", "type": "jsonb", "nullable": true, "sensitive": true },
+        { "name": "payload_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "payload_digest", "type": "char(64)", "nullable": false },
+        { "name": "occurred_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "trace_context", "type": "varchar(512)", "nullable": true },
+        { "name": "publish_attempts", "type": "integer", "nullable": false, "default": "0" },
+        { "name": "next_publish_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "published_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "publisher_id", "type": "varchar(160)", "nullable": true },
+        { "name": "publish_lease_until", "type": "timestamptz(6)", "nullable": true },
+        { "name": "version", "type": "bigint", "nullable": false, "default": "0" }
+      ],
+      "foreignKeys": [
+        { "name": "fk_outbox_event_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_outbox_event_tenant_id_id", "columns": ["tenant_id", "id"] }
+      ],
+      "checks": [
+        { "name": "ck_outbox_event_payload", "expression": "(payload IS NULL) <> (payload_ref IS NULL)" },
+        { "name": "ck_outbox_event_identity", "expression": "btrim(aggregate_type) <> '' AND btrim(event_type) <> '' AND btrim(partition_key) <> ''" },
+        { "name": "ck_outbox_event_digest", "expression": "payload_digest ~ '^[0-9a-f]{64}$'" },
+        { "name": "ck_outbox_event_publish", "expression": "publish_attempts >= 0 AND schema_version > 0 AND version >= 0" },
+        { "name": "ck_outbox_event_lease", "expression": "(published_at IS NULL AND ((publisher_id IS NULL AND publish_lease_until IS NULL) OR (publisher_id IS NOT NULL AND btrim(publisher_id) <> '' AND publish_lease_until IS NOT NULL AND publish_lease_until > created_at))) OR (published_at IS NOT NULL AND publisher_id IS NULL AND publish_lease_until IS NULL)" },
+        { "name": "ck_outbox_event_times", "expression": "next_publish_at >= occurred_at AND (published_at IS NULL OR published_at >= occurred_at)" },
+        { "name": "ck_outbox_event_trace", "expression": "trace_context IS NULL OR btrim(trace_context) <> ''" }
+      ],
+      "indexes": [
+        { "name": "idx_outbox_event_unpublished", "columns": ["tenant_id", "next_publish_at", "id"], "predicate": "published_at IS NULL", "purpose": "tenant-scoped SKIP LOCKED publisher scan" },
+        { "name": "idx_outbox_event_publish_lease", "columns": ["tenant_id", "publish_lease_until", "id"], "predicate": "published_at IS NULL AND publisher_id IS NOT NULL", "purpose": "tenant-scoped publisher lease recovery" },
+        { "name": "idx_outbox_event_tenant_created", "columns": ["tenant_id", "created_at", "id"], "purpose": "tenant event investigation" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); publisher uses constrained service policy" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "created_at", "activateWhen": "published history exceeds replay and diagnostics window" },
+      "retention": "keep past maximum consumer replay window before archive/purge"
+    },
+    {
+      "name": "processed_event",
+      "owner": "runtime",
+      "migrationTask": "G2-07",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "immutable-audit"],
+      "columns": [
+        { "name": "consumer_name", "type": "varchar(120)", "nullable": false },
+        { "name": "event_id", "type": "uuid", "nullable": false },
+        { "name": "event_type", "type": "varchar(160)", "nullable": false },
+        { "name": "schema_version", "type": "integer", "nullable": false },
+        { "name": "processed_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "result_digest", "type": "char(64)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_processed_event_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_processed_event_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_processed_event_consumer_event", "columns": ["consumer_name", "event_id"], "globalScopeReason": "event_id is globally unique and consumer deduplication is independent of tenant routing" }
+      ],
+      "checks": [
+        { "name": "ck_processed_event_schema", "expression": "schema_version > 0" },
+        { "name": "ck_processed_event_identity", "expression": "btrim(consumer_name) <> '' AND btrim(event_type) <> ''" },
+        { "name": "ck_processed_event_digest", "expression": "result_digest IS NULL OR result_digest ~ '^[0-9a-f]{64}$'" },
+        { "name": "ck_processed_event_time", "expression": "processed_at >= created_at" }
+      ],
+      "indexes": [
+        { "name": "idx_processed_event_retention", "columns": ["processed_at", "id"], "purpose": "dedup retention purge" },
+        { "name": "idx_processed_event_tenant", "columns": ["tenant_id", "processed_at", "id"], "purpose": "tenant investigation and tenant FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); consumers use constrained service policy" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "processed_at", "activateWhen": "dedup history crosses measured threshold" },
+      "retention": "longer than Kafka/event replay window"
+    },
+    {
+      "name": "idempotency_record",
+      "owner": "runtime",
+      "migrationTask": "G2-07",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "operation_scope", "type": "varchar(240)", "nullable": false },
+        { "name": "key_digest", "type": "char(64)", "nullable": false, "sensitive": true },
+        { "name": "request_digest", "type": "char(64)", "nullable": false },
+        { "name": "status", "type": "varchar(32)", "nullable": false },
+        { "name": "response_status", "type": "integer", "nullable": true },
+        { "name": "response_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "response_digest", "type": "char(64)", "nullable": true },
+        { "name": "expires_at", "type": "timestamptz(6)", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_idempotency_record_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_idempotency_record_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_idempotency_record_scope_key", "columns": ["tenant_id", "operation_scope", "key_digest"] }
+      ],
+      "checks": [
+        { "name": "ck_idempotency_record_status", "expression": "status IN ('PROCESSING','COMPLETED','FAILED')" },
+        { "name": "ck_idempotency_record_identity", "expression": "btrim(operation_scope) <> '' AND key_digest ~ '^[0-9a-f]{64}$' AND request_digest ~ '^[0-9a-f]{64}$'" },
+        { "name": "ck_idempotency_record_response", "expression": "(status = 'PROCESSING' AND response_status IS NULL AND response_ref IS NULL AND response_digest IS NULL) OR (status IN ('COMPLETED','FAILED') AND response_status BETWEEN 100 AND 599 AND response_digest ~ '^[0-9a-f]{64}$' AND (response_ref IS NULL OR btrim(response_ref) <> ''))" },
+        { "name": "ck_idempotency_record_time", "expression": "updated_at >= created_at AND expires_at > created_at AND version >= 0" }
+      ],
+      "indexes": [
+        { "name": "idx_idempotency_record_expiry", "columns": ["expires_at", "id"], "purpose": "retention purge" },
+        { "name": "idx_idempotency_record_processing", "columns": ["tenant_id", "status", "updated_at", "id"], "predicate": "status='PROCESSING'", "purpose": "stuck request recovery" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "created_at", "activateWhen": "idempotency volume crosses measured threshold" },
+      "retention": "not shorter than maximum client retry window"
+    },
+    {
+      "name": "dead_letter",
+      "owner": "runtime",
+      "migrationTask": "G2-07",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "node_instance_id", "type": "uuid", "nullable": false },
+        { "name": "task_execution_id", "type": "uuid", "nullable": true },
+        { "name": "category", "type": "varchar(40)", "nullable": false },
+        { "name": "error_code", "type": "varchar(120)", "nullable": false },
+        { "name": "error_summary_redacted", "type": "varchar(2000)", "nullable": false, "sensitive": true },
+        { "name": "payload_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "payload_digest", "type": "char(64)", "nullable": true },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "disposition_count", "type": "integer", "nullable": false, "default": "0" },
+        { "name": "last_disposition_at", "type": "timestamptz(6)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_dead_letter_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_dead_letter_node", "columns": ["tenant_id", "node_instance_id"], "targetTable": "node_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" },
+        { "name": "fk_dead_letter_execution", "columns": ["tenant_id", "task_execution_id", "node_instance_id"], "targetTable": "task_execution", "targetColumns": ["tenant_id", "id", "node_instance_id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_dead_letter_tenant_id_id", "columns": ["tenant_id", "id"] }
+      ],
+      "checks": [
+        { "name": "ck_dead_letter_status", "expression": "status IN ('OPEN','REQUEUED','RESOLVED','DISMISSED')" },
+        { "name": "ck_dead_letter_identity", "expression": "btrim(category) <> '' AND error_code ~ '^[A-Z][A-Z0-9]*(_[A-Z0-9]+){2,}$' AND btrim(error_summary_redacted) <> ''" },
+        { "name": "ck_dead_letter_payload", "expression": "(payload_ref IS NULL AND payload_digest IS NULL) OR (payload_ref IS NOT NULL AND btrim(payload_ref) <> '' AND payload_digest ~ '^[0-9a-f]{64}$')" },
+        { "name": "ck_dead_letter_disposition", "expression": "(status = 'OPEN' AND disposition_count = 0 AND last_disposition_at IS NULL) OR (status IN ('REQUEUED','RESOLVED','DISMISSED') AND disposition_count > 0 AND last_disposition_at IS NOT NULL AND last_disposition_at >= created_at)" },
+        { "name": "ck_dead_letter_audit", "expression": "updated_at >= created_at AND version >= 0" }
+      ],
+      "indexes": [
+        { "name": "idx_dead_letter_open", "columns": ["tenant_id", "status", "created_at", "id"], "predicate": "status='OPEN'", "purpose": "operations inbox" },
+        { "name": "idx_dead_letter_node", "columns": ["tenant_id", "node_instance_id", "created_at"], "purpose": "node history and composite FK" },
+        { "name": "idx_dead_letter_execution", "columns": ["tenant_id", "task_execution_id", "node_instance_id"], "predicate": "task_execution_id IS NOT NULL", "purpose": "attempt/node correlation and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "none-mvp", "reason": "open operational set must remain simple" },
+      "retention": "keep resolution metadata; purge sensitive payload after shorter policy"
+    },
+    {
+      "name": "worker_lease",
+      "owner": "runtime",
+      "migrationTask": "G2-07",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "node_instance_id", "type": "uuid", "nullable": false },
+        { "name": "lease_generation", "type": "bigint", "nullable": false },
+        { "name": "worker_id", "type": "varchar(160)", "nullable": false },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "acquired_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "expires_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "last_heartbeat_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "released_at", "type": "timestamptz(6)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_worker_lease_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_worker_lease_node", "columns": ["tenant_id", "node_instance_id"], "targetTable": "node_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_worker_lease_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_worker_lease_generation", "columns": ["tenant_id", "node_instance_id", "lease_generation"] },
+        { "name": "uq_worker_lease_active_node", "columns": ["tenant_id", "node_instance_id"], "predicate": "status='ACTIVE'" }
+      ],
+      "checks": [
+        { "name": "ck_worker_lease_generation", "expression": "lease_generation > 0 AND version >= 0" },
+        { "name": "ck_worker_lease_worker", "expression": "btrim(worker_id) <> ''" },
+        { "name": "ck_worker_lease_times", "expression": "updated_at >= created_at AND acquired_at >= created_at AND expires_at > acquired_at AND (status <> 'ACTIVE' OR expires_at > updated_at) AND (last_heartbeat_at IS NULL OR (last_heartbeat_at >= acquired_at AND last_heartbeat_at <= expires_at)) AND (released_at IS NULL OR released_at >= acquired_at)" },
+        { "name": "ck_worker_lease_status", "expression": "status IN ('ACTIVE','RELEASED','EXPIRED','FENCED')" },
+        { "name": "ck_worker_lease_lifecycle", "expression": "(status = 'ACTIVE' AND released_at IS NULL) OR (status IN ('RELEASED','EXPIRED','FENCED') AND released_at IS NOT NULL)" }
+      ],
+      "indexes": [
+        { "name": "idx_worker_lease_expiry", "columns": ["tenant_id", "expires_at", "id"], "predicate": "status='ACTIVE'", "purpose": "tenant-scoped lease expiry scan" },
+        { "name": "idx_worker_lease_node", "columns": ["tenant_id", "node_instance_id", "lease_generation"], "order": "ASC,ASC,DESC", "purpose": "lease history and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id(); worker uses constrained service policy" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "acquired_at", "activateWhen": "lease history crosses measured threshold" },
+      "retention": "keep beyond maximum late-result and incident window"
+    },
+    {
+      "name": "human_task",
+      "owner": "human-task",
+      "migrationTask": "G2-08",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "node_instance_id", "type": "uuid", "nullable": false },
+        { "name": "candidate_role_code", "type": "varchar(80)", "nullable": true },
+        { "name": "assignee_subject", "type": "varchar(255)", "nullable": true },
+        { "name": "form_schema", "type": "jsonb", "nullable": false },
+        { "name": "form_data_ref", "type": "varchar(1024)", "nullable": true, "sensitive": true },
+        { "name": "form_data_digest", "type": "char(64)", "nullable": true },
+        { "name": "status", "type": "varchar(40)", "nullable": false },
+        { "name": "deadline_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "timeout_policy", "type": "varchar(40)", "nullable": false },
+        { "name": "decision", "type": "varchar(40)", "nullable": true },
+        { "name": "decision_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "decided_by", "type": "varchar(255)", "nullable": true },
+        { "name": "transfer_count", "type": "integer", "nullable": false, "default": "0" },
+        { "name": "last_transferred_at", "type": "timestamptz(6)", "nullable": true },
+        { "name": "last_transferred_by", "type": "varchar(255)", "nullable": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_human_task_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" },
+        { "name": "fk_human_task_node", "columns": ["tenant_id", "node_instance_id"], "targetTable": "node_instance", "targetColumns": ["tenant_id", "id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_human_task_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_human_task_node", "columns": ["tenant_id", "node_instance_id"] }
+      ],
+      "checks": [
+        { "name": "ck_human_task_status", "expression": "status IN ('WAITING','DECIDED','TIMED_OUT','CANCELLED')" },
+        { "name": "ck_human_task_candidate", "expression": "(candidate_role_code IS NULL OR candidate_role_code ~ '^[a-z][a-z0-9_]*$') AND (assignee_subject IS NULL OR btrim(assignee_subject) <> '') AND (candidate_role_code IS NOT NULL OR assignee_subject IS NOT NULL)" },
+        { "name": "ck_human_task_form", "expression": "jsonb_typeof(form_schema) = 'object' AND form_schema <> '{}'::jsonb AND ((form_data_ref IS NULL AND form_data_digest IS NULL) OR (form_data_ref IS NOT NULL AND btrim(form_data_ref) <> '' AND form_data_digest ~ '^[0-9a-f]{64}$'))" },
+        { "name": "ck_human_task_decision", "expression": "(status = 'DECIDED' AND decision IN ('APPROVED','REJECTED') AND decision_at IS NOT NULL AND decided_by IS NOT NULL AND btrim(decided_by) <> '') OR (status IN ('WAITING','TIMED_OUT','CANCELLED') AND decision IS NULL AND decision_at IS NULL AND decided_by IS NULL)" },
+        { "name": "ck_human_task_timeout", "expression": "(deadline_at IS NULL AND timeout_policy = 'NONE' AND status <> 'TIMED_OUT') OR (deadline_at IS NOT NULL AND deadline_at >= created_at AND timeout_policy IN ('FAIL','AUTO_APPROVE','AUTO_REJECT','ESCALATE'))" },
+        { "name": "ck_human_task_transfer", "expression": "(transfer_count = 0 AND last_transferred_at IS NULL AND last_transferred_by IS NULL) OR (transfer_count > 0 AND last_transferred_at IS NOT NULL AND last_transferred_at >= created_at AND last_transferred_by IS NOT NULL AND btrim(last_transferred_by) <> '')" },
+        { "name": "ck_human_task_audit", "expression": "updated_at >= created_at AND version >= transfer_count AND (decision_at IS NULL OR (decision_at >= created_at AND decision_at <= updated_at)) AND (last_transferred_at IS NULL OR last_transferred_at <= updated_at)" }
+      ],
+      "indexes": [
+        { "name": "idx_human_task_assignee", "columns": ["tenant_id", "assignee_subject", "created_at", "id"], "predicate": "status='WAITING' AND assignee_subject IS NOT NULL", "purpose": "user inbox" },
+        { "name": "idx_human_task_candidate", "columns": ["tenant_id", "candidate_role_code", "created_at", "id"], "predicate": "status='WAITING' AND candidate_role_code IS NOT NULL", "purpose": "role inbox" },
+        { "name": "idx_human_task_deadline", "columns": ["tenant_id", "deadline_at", "id"], "predicate": "status='WAITING' AND deadline_at IS NOT NULL", "purpose": "tenant-scoped timeout scan" },
+        { "name": "idx_human_task_node", "columns": ["tenant_id", "node_instance_id"], "purpose": "node correlation and composite FK" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "none-mvp", "reason": "active inbox indexes remain simple; archive with instance" },
+      "retention": "same as workflow instance; decision evidence remains in audit"
+    },
+    {
+      "name": "audit_log",
+      "owner": "audit",
+      "migrationTask": "G2-08",
+      "tenantScope": "platform-optional",
+      "profiles": ["uuid-pk", "tenant-optional", "immutable-audit"],
+      "columns": [
+        { "name": "actor_type", "type": "varchar(40)", "nullable": false },
+        { "name": "actor_id", "type": "varchar(255)", "nullable": false },
+        { "name": "action", "type": "varchar(120)", "nullable": false },
+        { "name": "resource_type", "type": "varchar(80)", "nullable": false },
+        { "name": "resource_id", "type": "varchar(255)", "nullable": false },
+        { "name": "occurred_at", "type": "timestamptz(6)", "nullable": false },
+        { "name": "reason", "type": "varchar(1000)", "nullable": true },
+        { "name": "trace_id", "type": "varchar(32)", "nullable": false },
+        { "name": "source_ip", "type": "inet", "nullable": true, "sensitive": true },
+        { "name": "before_digest_or_redacted", "type": "jsonb", "nullable": true, "sensitive": true },
+        { "name": "after_digest_or_redacted", "type": "jsonb", "nullable": true, "sensitive": true }
+      ],
+      "foreignKeys": [
+        { "name": "fk_audit_log_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [],
+      "checks": [
+        { "name": "ck_audit_log_actor", "expression": "actor_type IN ('USER','SERVICE','WORKER','SYSTEM','PLATFORM_ADMIN') AND btrim(actor_id) <> '' AND (tenant_id IS NOT NULL OR actor_type = 'PLATFORM_ADMIN')" },
+        { "name": "ck_audit_log_action", "expression": "action ~ '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$'" },
+        { "name": "ck_audit_log_resource", "expression": "resource_type ~ '^[a-z][a-z0-9_]*$' AND btrim(resource_id) <> ''" },
+        { "name": "ck_audit_log_time", "expression": "created_at >= occurred_at" },
+        { "name": "ck_audit_log_trace", "expression": "trace_id ~ '^[0-9a-f]{32}$' AND trace_id <> repeat('0', 32)" },
+        { "name": "ck_audit_log_payload", "expression": "(reason IS NULL OR btrim(reason) <> '') AND (before_digest_or_redacted IS NULL OR jsonb_typeof(before_digest_or_redacted) = 'object') AND (after_digest_or_redacted IS NULL OR jsonb_typeof(after_digest_or_redacted) = 'object')" }
+      ],
+      "indexes": [
+        { "name": "idx_audit_log_tenant_time", "columns": ["tenant_id", "occurred_at", "id"], "order": "ASC,DESC,DESC", "purpose": "tenant audit cursor and tenant FK" },
+        { "name": "idx_audit_log_resource", "columns": ["tenant_id", "resource_type", "resource_id", "occurred_at"], "order": "ASC,ASC,ASC,DESC", "purpose": "resource history" },
+        { "name": "idx_audit_log_trace", "columns": ["tenant_id", "trace_id", "occurred_at", "id"], "order": "ASC,ASC,DESC,DESC", "purpose": "tenant/platform incident correlation" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id() OR (tenant_id IS NULL AND app_is_platform_admin())" },
+      "deletionStrategy": "immutable-history",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "occurred_at", "activateWhen": "audit volume requires pruning; append-only trigger remains per partition" },
+      "retention": "tenant/compliance-specific; never ordinary soft delete"
+    },
+    {
+      "name": "quota_usage",
+      "owner": "tenant",
+      "migrationTask": "G2-08",
+      "tenantScope": "required",
+      "profiles": ["uuid-pk", "tenant-required", "mutable-audit"],
+      "columns": [
+        { "name": "resource_type", "type": "varchar(80)", "nullable": false },
+        { "name": "window_start", "type": "timestamptz(6)", "nullable": false },
+        { "name": "window_end", "type": "timestamptz(6)", "nullable": false },
+        { "name": "used_value", "type": "bigint", "nullable": false, "default": "0" },
+        { "name": "limit_value", "type": "bigint", "nullable": false }
+      ],
+      "foreignKeys": [
+        { "name": "fk_quota_usage_tenant", "columns": ["tenant_id"], "targetTable": "tenant", "targetColumns": ["id"], "onDelete": "RESTRICT" }
+      ],
+      "uniqueConstraints": [
+        { "name": "uq_quota_usage_tenant_id_id", "columns": ["tenant_id", "id"] },
+        { "name": "uq_quota_usage_window", "columns": ["tenant_id", "resource_type", "window_start"] }
+      ],
+      "checks": [
+        { "name": "ck_quota_usage_resource", "expression": "resource_type ~ '^[a-z][a-z0-9_]*$'" },
+        { "name": "ck_quota_usage_window", "expression": "window_end > window_start" },
+        { "name": "ck_quota_usage_values", "expression": "used_value >= 0 AND limit_value >= 0 AND version >= 0" },
+        { "name": "ck_quota_usage_audit", "expression": "updated_at >= created_at" }
+      ],
+      "indexes": [
+        { "name": "idx_quota_usage_active", "columns": ["tenant_id", "resource_type", "window_end", "id"], "purpose": "current quota lookup and tenant FK" },
+        { "name": "idx_quota_usage_retention", "columns": ["tenant_id", "window_end", "id"], "purpose": "tenant-scoped window retention purge" }
+      ],
+      "rls": { "enabled": true, "policy": "tenant_id = app_tenant_id()" },
+      "deletionStrategy": "retention-purge",
+      "partitioning": { "mode": "deferred-range-monthly", "key": "window_start", "activateWhen": "quota history crosses measured threshold" },
+      "retention": "retain billing/audit window, then aggregate and purge"
+    }
+  ],
+  "requiredQueryContracts": [
+    { "id": "Q-01", "table": "workflow_instance", "purpose": "tenant stable cursor", "index": "idx_workflow_instance_tenant_created" },
+    { "id": "Q-02", "table": "workflow_instance", "purpose": "business key search", "index": "idx_workflow_instance_business_key" },
+    { "id": "Q-03", "table": "node_instance", "purpose": "due task SKIP LOCKED scan", "index": "idx_node_instance_schedule" },
+    { "id": "Q-04", "table": "node_instance", "purpose": "expired lease recovery", "index": "idx_node_instance_lease_expiry" },
+    { "id": "Q-05", "table": "outbox_event", "purpose": "unpublished Outbox scan", "index": "idx_outbox_event_unpublished" },
+    { "id": "Q-06", "table": "schedule_occurrence", "purpose": "Cron due scan", "index": "idx_schedule_occurrence_due" },
+    { "id": "Q-07", "table": "human_task", "purpose": "assignee inbox", "index": "idx_human_task_assignee" },
+    { "id": "Q-08", "table": "human_task", "purpose": "role inbox", "index": "idx_human_task_candidate" },
+    { "id": "Q-09", "table": "dead_letter", "purpose": "open dead-letter operations", "index": "idx_dead_letter_open" },
+    { "id": "Q-10", "table": "audit_log", "purpose": "tenant audit cursor", "index": "idx_audit_log_tenant_time" }
+  ],
+  "partitionCandidates": [
+    "workflow_instance",
+    "task_execution",
+    "schedule_occurrence",
+    "outbox_event",
+    "processed_event",
+    "idempotency_record",
+    "worker_lease",
+    "audit_log",
+    "quota_usage"
+  ],
+  "document": "docs/architecture/database-er-model.md"
+}

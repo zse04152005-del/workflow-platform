@@ -1,0 +1,11 @@
+{
+  "component": "human-task-kernel",
+  "tasks": ["G7-01", "G7-02", "G7-03", "G7-04", "G7-05", "G7-06", "G7-07", "G7-08"],
+  "nodeStatus": "WAITING_APPROVAL",
+  "taskStatuses": ["OPEN", "APPROVED", "REJECTED", "TIMED_OUT"],
+  "assignment": ["candidate-roles", "assignee", "transfer-reason"],
+  "decision": ["expected-status", "expected-version", "first-valid-only"],
+  "timeoutPolicies": ["fail", "auto-reject", "escalate-reminder"],
+  "audit": ["append-action", "actor", "reason", "form-redaction"],
+  "e2e": "large-refund-human-approval"
+}

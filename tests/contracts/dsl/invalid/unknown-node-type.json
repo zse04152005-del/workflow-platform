@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "unknown-node",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "script", "type": "javascript", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "execute", "from": "start", "to": "script", "on": "success" },
+    { "id": "finish", "from": "script", "to": "end", "on": "success" }
+  ]
+}

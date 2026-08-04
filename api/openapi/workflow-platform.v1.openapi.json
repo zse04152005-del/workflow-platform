@@ -1,0 +1,1299 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Workflow Platform Public API",
+    "version": "1.0.0",
+    "description": "Public control-plane contract. Tenant identity is derived exclusively from the authenticated OIDC context."
+  },
+  "servers": [
+    { "url": "/", "description": "Current deployment" }
+  ],
+  "security": [
+    { "oidc": ["openid"] }
+  ],
+  "tags": [
+    { "name": "Workflows" },
+    { "name": "Instances" },
+    { "name": "Human Tasks" }
+  ],
+  "paths": {
+    "/api/v1/workflows": {
+      "get": {
+        "operationId": "listWorkflows",
+        "summary": "List visible workflows",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "planned",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow page",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowListResponse" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflow",
+        "summary": "Create a workflow draft",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CreateWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowDetail" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}": {
+      "get": {
+        "operationId": "getWorkflow",
+        "summary": "Get a workflow draft and publication summary",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow detail",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowDetail" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/draft": {
+      "put": {
+        "operationId": "updateWorkflowDraft",
+        "summary": "Replace a workflow draft using optimistic concurrency",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" },
+          { "$ref": "#/components/parameters/IfMatch" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/UpdateDraftRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft updated",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowDetail" } }
+            }
+          },
+          "412": { "$ref": "#/components/responses/ProblemResponse" },
+          "428": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/validate": {
+      "post": {
+        "operationId": "validateWorkflow",
+        "summary": "Validate the current or supplied draft without publishing",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ValidateWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ValidationResult" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/publish": {
+      "post": {
+        "operationId": "publishWorkflow",
+        "summary": "Publish an immutable workflow version",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PublishWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Published version",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PublishedWorkflow" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ProblemResponse" },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "409": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/clone": {
+      "post": {
+        "operationId": "cloneWorkflow",
+        "summary": "Clone the current draft or one immutable version into a new draft",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CloneWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cloned draft created",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowDetail" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ProblemResponse" },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "409": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/export": {
+      "get": {
+        "operationId": "exportWorkflow",
+        "summary": "Export the current draft or one immutable version as a portable bundle",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "description": "Published version; omit to export the current draft.",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integrity-bound Secret-free workflow bundle",
+            "headers": { "Cache-Control": { "$ref": "#/components/headers/CacheControlNoStore" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowExportBundle" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ProblemResponse" },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/import": {
+      "post": {
+        "operationId": "importWorkflow",
+        "summary": "Import a portable bundle into a new draft with explicit resource mappings",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ImportWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Imported draft created",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowDetail" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ProblemResponse" },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "409": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/versions/diff": {
+      "get": {
+        "operationId": "diffWorkflowVersions",
+        "summary": "Compare two immutable workflow versions",
+        "tags": ["Workflows"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          {
+            "name": "fromVersion",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          },
+          {
+            "name": "toVersion",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic bounded JSON-Pointer differences",
+            "headers": { "Cache-Control": { "$ref": "#/components/headers/CacheControlNoStore" } },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowVersionDiff" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ProblemResponse" },
+          "404": { "$ref": "#/components/responses/ProblemResponse" },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/instances": {
+      "post": {
+        "operationId": "startWorkflowInstance",
+        "summary": "Start a workflow instance manually",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "planned",
+        "parameters": [
+          { "$ref": "#/components/parameters/WorkflowId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/StartWorkflowRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Instance accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/InstanceSummary" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances": {
+      "get": {
+        "operationId": "listWorkflowInstances",
+        "summary": "List visible workflow instances",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instance page",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeInstancePage" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}": {
+      "get": {
+        "operationId": "getWorkflowInstance",
+        "summary": "Get a tenant-visible workflow instance",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instance detail",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeInstanceView" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/nodes": {
+      "get": {
+        "operationId": "listWorkflowInstanceNodes",
+        "summary": "List node instances using a stable keyset cursor",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node instance page without raw payloads",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeNodePage" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/attempts": {
+      "get": {
+        "operationId": "listWorkflowInstanceAttempts",
+        "summary": "List execution attempts using a stable keyset cursor",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution attempt page with redacted failures and payload references",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeAttemptPage" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/pause": {
+      "post": {
+        "operationId": "pauseWorkflowInstance",
+        "summary": "Request an instance pause",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ControlInstanceRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pause requested",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/resume": {
+      "post": {
+        "operationId": "resumeWorkflowInstance",
+        "summary": "Resume a paused instance",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ControlInstanceRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Resume requested",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/cancel": {
+      "post": {
+        "operationId": "cancelWorkflowInstance",
+        "summary": "Request cooperative instance cancellation",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ControlInstanceRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Cancellation requested",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/instances/{instanceId}/replay": {
+      "post": {
+        "operationId": "replayWorkflowInstance",
+        "summary": "Create a governed replay request",
+        "tags": ["Instances"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/InstanceId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ReplayInstanceRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Replay accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/dead-letters/{deadLetterId}/notes": {
+      "post": {
+        "operationId": "addDeadLetterNote",
+        "summary": "Append a redacted operator note to a dead letter",
+        "tags": ["Runtime Reliability"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/DeadLetterId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AddDeadLetterNoteRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Dead-letter note accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeadLetterActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/dead-letters/{deadLetterId}/redispatch": {
+      "post": {
+        "operationId": "redispatchDeadLetter",
+        "summary": "Redispatch a dead letter through a new failed-node replay",
+        "tags": ["Runtime Reliability"],
+        "x-workflow-implementation-status": "implemented",
+        "parameters": [
+          { "$ref": "#/components/parameters/DeadLetterId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/RedispatchDeadLetterRequest" } }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Dead-letter redispatch accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeadLetterActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/tasks/inbox": {
+      "get": {
+        "operationId": "listHumanTaskInbox",
+        "summary": "List human tasks visible to the caller",
+        "tags": ["Human Tasks"],
+        "x-workflow-implementation-status": "planned",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Human task page",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TaskInboxResponse" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    },
+    "/api/v1/tasks/{taskId}/decisions": {
+      "post": {
+        "operationId": "decideHumanTask",
+        "summary": "Approve, reject, or transfer a human task",
+        "tags": ["Human Tasks"],
+        "x-workflow-implementation-status": "planned",
+        "parameters": [
+          { "$ref": "#/components/parameters/TaskId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/TaskDecisionRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ActionAccepted" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ProblemResponse" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "oidc": {
+        "type": "openIdConnect",
+        "openIdConnectUrl": "https://identity.workflow-platform.example/realms/workflow/.well-known/openid-configuration"
+      }
+    },
+    "parameters": {
+      "WorkflowId": {
+        "name": "workflowId",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/UuidV7" }
+      },
+      "InstanceId": {
+        "name": "instanceId",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/UuidV7" }
+      },
+      "DeadLetterId": {
+        "name": "deadLetterId",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/UuidV7" }
+      },
+      "TaskId": {
+        "name": "taskId",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/UuidV7" }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Opaque key scoped to authenticated tenant, operation, and target resource.",
+        "schema": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9._~-]+$" }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Strong ETag returned by the latest draft read or write.",
+        "schema": { "type": "string", "pattern": "^\\\"[^\\\"]+\\\"$" }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "Strong representation revision used with If-Match.",
+        "schema": { "type": "string" }
+      },
+      "XTraceId": {
+        "description": "Lowercase W3C-compatible trace identifier.",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/TraceId" }
+      },
+      "CacheControlNoStore": {
+        "description": "Problem responses are never cached.",
+        "required": true,
+        "schema": { "type": "string", "const": "no-store" }
+      },
+      "WWWAuthenticate": {
+        "description": "Bearer challenge on authentication failures.",
+        "schema": { "type": "string", "const": "Bearer" }
+      },
+      "RetryAfter": {
+        "description": "Delay in seconds for retryable 429 or 503 responses.",
+        "schema": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "responses": {
+      "ProblemResponse": {
+        "description": "RFC 9457 problem response; status and stable code identify the failure.",
+        "headers": {
+          "Cache-Control": { "$ref": "#/components/headers/CacheControlNoStore" },
+          "X-Trace-Id": { "$ref": "#/components/headers/XTraceId" },
+          "WWW-Authenticate": { "$ref": "#/components/headers/WWWAuthenticate" },
+          "Retry-After": { "$ref": "#/components/headers/RetryAfter" }
+        },
+        "content": {
+          "application/problem+json": { "schema": { "$ref": "#/components/schemas/ProblemDetail" } }
+        }
+      }
+    },
+    "schemas": {
+      "UuidV7": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      },
+      "UtcInstant": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,6})?Z$"
+      },
+      "TraceId": {
+        "type": "string",
+        "pattern": "^(?!0{32}$)[0-9a-f]{32}$"
+      },
+      "WorkflowDefinition": {
+        "$ref": "../../schemas/dsl/workflow-definition-v1.schema.json"
+      },
+      "FieldValidationError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "code", "message"],
+        "properties": {
+          "field": { "type": "string", "pattern": "^(?:_[a-z][A-Za-z0-9_]*|[A-Za-z][A-Za-z0-9_]*)(?:\\[(?:0|[1-9][0-9]*)\\]|\\.[A-Za-z][A-Za-z0-9_]*)*$" },
+          "code": { "enum": ["required", "invalid_format", "invalid_size", "out_of_range", "invalid_type", "invalid"] },
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "title", "status", "detail", "instance", "code", "traceId", "errors", "retryable"],
+        "properties": {
+          "type": { "type": "string", "format": "uri" },
+          "title": { "type": "string", "minLength": 1 },
+          "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+          "detail": { "type": "string", "minLength": 1 },
+          "instance": { "type": "string", "pattern": "^/[^?#]*$" },
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$" },
+          "traceId": { "$ref": "#/components/schemas/TraceId" },
+          "errors": { "type": "array", "maxItems": 50, "items": { "$ref": "#/components/schemas/FieldValidationError" } },
+          "retryable": { "type": "boolean" },
+          "retryAfterSeconds": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "CreateWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["projectId", "name", "definition"],
+        "properties": {
+          "projectId": { "$ref": "#/components/schemas/UuidV7" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+          "description": { "type": "string", "maxLength": 1000 },
+          "definition": { "$ref": "#/components/schemas/WorkflowDefinition" }
+        }
+      },
+      "UpdateDraftRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["definition"],
+        "properties": {
+          "definition": { "$ref": "#/components/schemas/WorkflowDefinition" },
+          "changeNote": { "type": "string", "maxLength": 500 }
+        }
+      },
+      "ValidateWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "definition": { "$ref": "#/components/schemas/WorkflowDefinition" }
+        }
+      },
+      "PublishWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expectedDraftRevision"],
+        "properties": {
+          "expectedDraftRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "releaseNote": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      },
+      "WorkflowResourceMapping": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "sourceReference", "targetReference"],
+        "properties": {
+          "kind": { "enum": ["connector", "secret"] },
+          "sourceReference": { "type": "string", "minLength": 3, "maxLength": 200, "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$" },
+          "targetReference": { "type": "string", "minLength": 3, "maxLength": 200, "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$" }
+        }
+      },
+      "CloneWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["targetProjectId", "name"],
+        "properties": {
+          "targetProjectId": { "$ref": "#/components/schemas/UuidV7" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+          "description": { "type": "string", "maxLength": 1000 },
+          "sourceVersion": { "type": "integer", "minimum": 1 },
+          "resourceMappings": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/components/schemas/WorkflowResourceMapping" } }
+        }
+      },
+      "WorkflowResourceReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "reference"],
+        "properties": {
+          "kind": { "enum": ["connector", "secret"] },
+          "reference": { "type": "string", "minLength": 3, "maxLength": 200, "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$" }
+        }
+      },
+      "WorkflowExportSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflowId", "kind", "checksum", "capturedAt"],
+        "properties": {
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "kind": { "enum": ["draft", "published_version"] },
+          "draftRevision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "version": { "type": "integer", "minimum": 1 },
+          "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "capturedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "draft" } }, "required": ["kind"] },
+            "then": { "required": ["draftRevision"], "not": { "required": ["version"] } },
+            "else": { "required": ["version"], "not": { "required": ["draftRevision"] } }
+          }
+        ]
+      },
+      "WorkflowExportContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "definition"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+          "description": { "type": "string", "maxLength": 1000 },
+          "definition": { "$ref": "#/components/schemas/WorkflowDefinition" }
+        }
+      },
+      "WorkflowExportBundle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["format", "formatVersion", "source", "workflow", "resources"],
+        "properties": {
+          "format": { "type": "string", "const": "workflow-platform-definition" },
+          "formatVersion": { "type": "integer", "const": 1 },
+          "source": { "$ref": "#/components/schemas/WorkflowExportSource" },
+          "workflow": { "$ref": "#/components/schemas/WorkflowExportContent" },
+          "resources": { "type": "array", "maxItems": 10000, "uniqueItems": true, "items": { "$ref": "#/components/schemas/WorkflowResourceReference" } }
+        }
+      },
+      "ImportWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["targetProjectId", "name", "bundle", "resourceMappings"],
+        "properties": {
+          "targetProjectId": { "$ref": "#/components/schemas/UuidV7" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+          "description": { "type": "string", "maxLength": 1000 },
+          "bundle": { "$ref": "#/components/schemas/WorkflowExportBundle" },
+          "resourceMappings": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/components/schemas/WorkflowResourceMapping" } }
+        }
+      },
+      "WorkflowVersionReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "checksum", "publishedAt"],
+        "properties": {
+          "version": { "type": "integer", "minimum": 1 },
+          "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "publishedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "WorkflowDiffChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation", "path"],
+        "properties": {
+          "operation": { "enum": ["add", "remove", "replace"] },
+          "path": { "type": "string", "pattern": "^/", "minLength": 1, "maxLength": 16384 },
+          "before": {},
+          "after": {}
+        }
+      },
+      "WorkflowVersionDiff": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflowId", "from", "to", "changeCount", "truncated", "changes"],
+        "properties": {
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "from": { "$ref": "#/components/schemas/WorkflowVersionReference" },
+          "to": { "$ref": "#/components/schemas/WorkflowVersionReference" },
+          "changeCount": { "type": "integer", "minimum": 0 },
+          "truncated": { "type": "boolean" },
+          "changes": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/WorkflowDiffChange" } }
+        }
+      },
+      "StartWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input"],
+        "properties": {
+          "workflowVersion": { "type": "integer", "minimum": 1 },
+          "businessKey": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "input": { "type": "object" }
+        }
+      },
+      "ControlInstanceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "ReplayInstanceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "fromNodeId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$", "maxLength": 80 }
+        }
+      },
+      "AddDeadLetterNoteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["note"],
+        "properties": {
+          "note": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "RedispatchDeadLetterRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "DeadLetterActionAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actionId", "status", "acceptedAt", "deadLetterId", "deadLetterStatus"],
+        "properties": {
+          "actionId": { "$ref": "#/components/schemas/UuidV7" },
+          "status": { "const": "accepted" },
+          "acceptedAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "deadLetterId": { "$ref": "#/components/schemas/UuidV7" },
+          "deadLetterStatus": { "enum": ["OPEN", "REQUEUED", "RESOLVED", "DISMISSED"] },
+          "targetInstanceId": { "$ref": "#/components/schemas/UuidV7" }
+        }
+      },
+      "TaskDecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision"],
+        "properties": {
+          "decision": { "enum": ["approve", "reject", "transfer"] },
+          "comment": { "type": "string", "maxLength": 2000 },
+          "transferToUserId": { "$ref": "#/components/schemas/UuidV7" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "decision": { "const": "transfer" } } },
+            "then": { "required": ["transferToUserId"] },
+            "else": { "not": { "required": ["transferToUserId"] } }
+          }
+        ]
+      },
+      "WorkflowSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "projectId", "name", "status", "draftRevision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "projectId": { "$ref": "#/components/schemas/UuidV7" },
+          "name": { "type": "string" },
+          "status": { "enum": ["draft", "active", "inactive"] },
+          "draftRevision": { "type": "integer", "minimum": 1 },
+          "publishedVersion": { "type": "integer", "minimum": 1 },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "updatedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "WorkflowDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "projectId", "name", "status", "draftRevision", "definition", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "projectId": { "$ref": "#/components/schemas/UuidV7" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "enum": ["draft", "active", "inactive"] },
+          "draftRevision": { "type": "integer", "minimum": 1 },
+          "publishedVersion": { "type": "integer", "minimum": 1 },
+          "definition": { "$ref": "#/components/schemas/WorkflowDefinition" },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "updatedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "WorkflowListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/WorkflowSummary" } },
+          "nextCursor": { "type": "string" }
+        }
+      },
+      "ValidationIssue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "path", "message", "severity"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "DSL_PARSE_EMPTY_INPUT",
+              "DSL_PARSE_INPUT_TOO_LARGE",
+              "DSL_PARSE_INVALID_UTF8",
+              "DSL_PARSE_MALFORMED_DOCUMENT",
+              "DSL_PARSE_RESOURCE_LIMIT_EXCEEDED",
+              "DSL_PARSE_MULTIPLE_DOCUMENTS",
+              "DSL_PARSE_ROOT_NOT_OBJECT",
+              "DSL_PARSE_CORE_MODEL_INVALID",
+              "DSL_PARSE_CANONICAL_OUTPUT_TOO_LARGE",
+              "DSL_DEFINITION_NAME_MISMATCH",
+              "DSL_GRAPH_START_NODE_COUNT_INVALID",
+              "DSL_GRAPH_END_NODE_REQUIRED",
+              "DSL_GRAPH_DUPLICATE_NODE_ID",
+              "DSL_GRAPH_DUPLICATE_EDGE_ID",
+              "DSL_GRAPH_UNKNOWN_EDGE_SOURCE",
+              "DSL_GRAPH_UNKNOWN_EDGE_TARGET",
+              "DSL_GRAPH_SELF_LOOP_NOT_ALLOWED",
+              "DSL_GRAPH_INCOMING_EDGE_TO_START",
+              "DSL_GRAPH_OUTGOING_EDGE_FROM_END",
+              "DSL_GRAPH_TRANSITION_NOT_ALLOWED",
+              "DSL_GRAPH_DUPLICATE_EDGE_ROUTE",
+              "DSL_GRAPH_OUTGOING_TRANSITION_AMBIGUOUS",
+              "DSL_GRAPH_OUTGOING_EDGE_COUNT_INVALID",
+              "DSL_GRAPH_NODE_UNREACHABLE",
+              "DSL_GRAPH_NODE_CANNOT_REACH_END",
+              "DSL_GRAPH_CYCLE_NOT_ALLOWED",
+              "DSL_CONFIGURATION_TRIGGER_SCHEMA_INVALID",
+              "DSL_CONFIGURATION_NODE_SCHEMA_INVALID",
+              "DSL_CONFIGURATION_PARAMETER_TYPE_INVALID",
+              "DSL_CONFIGURATION_CONNECTOR_REFERENCE_INVALID",
+              "DSL_CONFIGURATION_CONNECTOR_UNAVAILABLE",
+              "DSL_CONFIGURATION_CONNECTOR_USE_FORBIDDEN",
+              "DSL_CONFIGURATION_SECRET_REFERENCE_INVALID",
+              "DSL_CONFIGURATION_SECRET_UNAVAILABLE",
+              "DSL_CONFIGURATION_SECRET_USE_FORBIDDEN",
+              "DSL_EXPRESSION_SYNTAX_INVALID",
+              "DSL_EXPRESSION_TYPE_MISMATCH",
+              "DSL_EXPRESSION_IDENTIFIER_UNKNOWN",
+              "DSL_EXPRESSION_OPERATION_FORBIDDEN",
+              "DSL_EXPRESSION_BUDGET_EXCEEDED"
+            ]
+          },
+          "path": { "type": "string", "pattern": "^/", "minLength": 1, "maxLength": 256 },
+          "nodeId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$", "maxLength": 80 },
+          "message": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "severity": { "enum": ["error"] }
+        }
+      },
+      "ValidationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "valid", "issueCount", "truncated", "issues"],
+        "properties": {
+          "source": { "enum": ["current_draft", "supplied_definition"] },
+          "draftRevision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "valid": { "type": "boolean" },
+          "issueCount": { "type": "integer", "minimum": 0 },
+          "truncated": { "type": "boolean" },
+          "issues": { "type": "array", "maxItems": 500, "items": { "$ref": "#/components/schemas/ValidationIssue" } }
+        }
+      },
+      "PublishedWorkflow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflowId", "version", "checksum", "publishedAt"],
+        "properties": {
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "version": { "type": "integer", "minimum": 1 },
+          "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "publishedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "InstanceSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "workflowId", "workflowVersion", "status", "startedAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowVersion": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["pending", "running", "paused", "succeeded", "failed", "cancelled"] },
+          "businessKey": { "type": "string" },
+          "startedAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "completedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "NodeInstanceSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodeId", "status", "attempt"],
+        "properties": {
+          "nodeId": { "type": "string" },
+          "status": { "enum": ["pending", "ready", "running", "waiting_timer", "waiting_approval", "retry_wait", "succeeded", "failed", "cancelled"] },
+          "attempt": { "type": "integer", "minimum": 0 },
+          "startedAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "completedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "InstanceDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "workflowId", "workflowVersion", "status", "startedAt", "nodes"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowVersion": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["pending", "running", "paused", "succeeded", "failed", "cancelled"] },
+          "businessKey": { "type": "string" },
+          "startedAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "completedAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/NodeInstanceSummary" } }
+        }
+      },
+      "InstanceListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/InstanceSummary" } },
+          "nextCursor": { "type": "string" }
+        }
+      },
+      "RuntimeInstanceView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "workflowId", "workflowVersionId", "workflowVersion", "status", "inputReference", "inputDigest", "traceId", "createdAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowId": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowVersionId": { "$ref": "#/components/schemas/UuidV7" },
+          "workflowVersion": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["CREATED", "RUNNING", "PAUSE_REQUESTED", "PAUSED", "CANCEL_REQUESTED", "CANCELLED", "SUCCEEDED", "FAILED"] },
+          "businessKey": { "type": ["string", "null"], "maxLength": 200 },
+          "inputReference": { "type": ["string", "null"], "minLength": 1, "maxLength": 1024 },
+          "inputDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "traceId": { "$ref": "#/components/schemas/TraceId" },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "startedAt": { "anyOf": [{ "$ref": "#/components/schemas/UtcInstant" }, { "type": "null" }] },
+          "completedAt": { "anyOf": [{ "$ref": "#/components/schemas/UtcInstant" }, { "type": "null" }] }
+        }
+      },
+      "RuntimeNodeView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "instanceId", "nodeId", "nodeType", "status", "attemptNo", "inputReference", "inputDigest", "createdAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "instanceId": { "$ref": "#/components/schemas/UuidV7" },
+          "nodeId": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "nodeType": { "enum": ["start", "end", "http", "condition", "delay", "human_task"] },
+          "status": { "enum": ["PENDING", "READY", "DISPATCHED", "RUNNING", "WAITING_TIMER", "WAITING_APPROVAL", "RETRY_WAIT", "SUCCEEDED", "FAILED", "CANCELLED"] },
+          "attemptNo": { "type": "integer", "minimum": 0 },
+          "inputReference": { "type": ["string", "null"], "minLength": 1, "maxLength": 1024 },
+          "inputDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "outputReference": { "type": ["string", "null"], "minLength": 1, "maxLength": 1024 },
+          "outputDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "errorCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$" },
+          "nextScheduleAt": { "anyOf": [{ "$ref": "#/components/schemas/UtcInstant" }, { "type": "null" }] },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "RuntimeAttemptView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "instanceId", "nodeInstanceId", "attemptNo", "executionId", "status", "inputReference", "inputDigest", "createdAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "instanceId": { "$ref": "#/components/schemas/UuidV7" },
+          "nodeInstanceId": { "$ref": "#/components/schemas/UuidV7" },
+          "attemptNo": { "type": "integer", "minimum": 1 },
+          "executionId": { "$ref": "#/components/schemas/UuidV7" },
+          "status": { "enum": ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABANDONED", "CANCELLED"] },
+          "inputReference": { "type": ["string", "null"], "minLength": 1, "maxLength": 1024 },
+          "inputDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "outputReference": { "type": ["string", "null"], "minLength": 1, "maxLength": 1024 },
+          "outputDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "errorCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$" },
+          "errorSummaryRedacted": { "type": ["string", "null"], "maxLength": 2000 },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "startedAt": { "anyOf": [{ "$ref": "#/components/schemas/UtcInstant" }, { "type": "null" }] },
+          "finishedAt": { "anyOf": [{ "$ref": "#/components/schemas/UtcInstant" }, { "type": "null" }] }
+        }
+      },
+      "RuntimeInstancePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "nextCursor", "hasMore"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 200, "items": { "$ref": "#/components/schemas/RuntimeInstanceView" } },
+          "nextCursor": { "type": ["string", "null"], "minLength": 1, "maxLength": 1000 },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "RuntimeNodePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "nextCursor", "hasMore"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 200, "items": { "$ref": "#/components/schemas/RuntimeNodeView" } },
+          "nextCursor": { "type": ["string", "null"], "minLength": 1, "maxLength": 1000 },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "RuntimeAttemptPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "nextCursor", "hasMore"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 200, "items": { "$ref": "#/components/schemas/RuntimeAttemptView" } },
+          "nextCursor": { "type": ["string", "null"], "minLength": 1, "maxLength": 1000 },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "TaskSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "instanceId", "nodeId", "status", "createdAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/UuidV7" },
+          "instanceId": { "$ref": "#/components/schemas/UuidV7" },
+          "nodeId": { "type": "string" },
+          "status": { "enum": ["open", "decided", "timed_out", "cancelled"] },
+          "candidateRole": { "type": "string" },
+          "assigneeUserId": { "$ref": "#/components/schemas/UuidV7" },
+          "deadlineAt": { "$ref": "#/components/schemas/UtcInstant" },
+          "createdAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      },
+      "TaskInboxResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/TaskSummary" } },
+          "nextCursor": { "type": "string" }
+        }
+      },
+      "ActionAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actionId", "status", "acceptedAt"],
+        "properties": {
+          "actionId": { "$ref": "#/components/schemas/UuidV7" },
+          "status": { "const": "accepted" },
+          "acceptedAt": { "$ref": "#/components/schemas/UtcInstant" }
+        }
+      }
+    }
+  }
+}

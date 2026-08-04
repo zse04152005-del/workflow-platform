@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-10",
+  "requirements": ["REQ-DSL-001", "REQ-DEF-001"],
+  "generation": {
+    "algorithm": "java.util.Random",
+    "seed": 30310,
+    "reproducible": true,
+    "networkRequired": false
+  },
+  "parser": {
+    "permutationCases": 64,
+    "properties": [
+      "object-key-order-independent",
+      "equivalent-number-normalization",
+      "canonical-reparse-idempotent",
+      "checksum-stable"
+    ],
+    "combinedAttackCorpusMinimum": 9,
+    "failurePayloadEchoAllowed": false
+  },
+  "graph": {
+    "generatedDagCases": 48,
+    "maximumGeneratedNodes": 500,
+    "generatedCycleCases": 16,
+    "properties": [
+      "valid-dag-accepted",
+      "topological-order-deterministic",
+      "maximum-depth-stack-safe",
+      "cycle-mutation-rejected-deterministically"
+    ]
+  },
+  "compatibility": {
+    "immutableSchemaVersion": 1,
+    "unknownOptionalRootFields": "preserve-canonical-ignore-runtime",
+    "futureSchemaWithoutUpcaster": "reject",
+    "fixtures": [
+      {
+        "path": "tests/contracts/dsl/robustness/compatibility/v1-minimal.json",
+        "canonicalChecksum": "cb3b9f4cf6e2d7ba19da1a94421a4e1176c161bd1175bfd00d7ecbcf1655607a"
+      },
+      {
+        "path": "tests/contracts/dsl/robustness/compatibility/v1-root-extension.json",
+        "canonicalChecksum": "577ef1eef8e139a20316fbd574beeaa3f404fc04d6e6b735d7c556165fc7bd34"
+      },
+      {
+        "path": "tests/contracts/dsl/robustness/compatibility/v1-condition.json",
+        "canonicalChecksum": "bef2fc4af7a2e714f4a0e2e7dec30d03bb7d76255a4cde05695810b242c9cf90"
+      }
+    ]
+  },
+  "expressions": {
+    "maliciousCelCasesMinimum": 13,
+    "maliciousJsonPathCasesMinimum": 10,
+    "generatedBudgetBombs": 3,
+    "attackFamilies": [
+      "function-invocation",
+      "method-invocation",
+      "reflection-runtime-environment",
+      "nondeterministic-identifiers",
+      "unsupported-language-constructs",
+      "recursive-descent-wildcard-filter-slice-union-script",
+      "token-ast-nesting-path-budget"
+    ],
+    "failurePayloadEchoAllowed": false
+  },
+  "concurrency": {
+    "database": "PostgreSQL Testcontainers",
+    "writers": 8,
+    "startBarrier": true,
+    "sameStrongEtag": true,
+    "expectedSuccesses": 1,
+    "expectedLoserFailure": "precondition_failed",
+    "expectedRevisionIncrement": 1,
+    "loserIdempotencyClaimsRolledBack": true,
+    "timeoutSeconds": 30
+  },
+  "resolvedDeferredContracts": [
+    "config/dsl/core-model.json",
+    "config/dsl/parser-normalization.json",
+    "config/dsl/graph-validation.json",
+    "config/dsl/expression-sandbox.json"
+  ],
+  "sourceBindings": {
+    "javaTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowDefinitionRobustnessTests.java",
+    "postgresTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java",
+    "fixtures": "tests/contracts/dsl/robustness/compatibility",
+    "compatibilityBaseline": "config/contracts/compatibility-baseline.json",
+    "verifier": "scripts/definition/verify-workflow-robustness-suite.mjs",
+    "verifierTests": "scripts/definition/test-workflow-robustness-suite-verifier.mjs"
+  },
+  "document": "docs/architecture/workflow-definition-robustness-suite.md"
+}

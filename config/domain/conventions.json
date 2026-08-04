@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "1.4.0",
+  "reviewedOn": "2026-07-31",
+  "task": "G2-02",
+  "identifiers": {
+    "internal": {
+      "algorithm": "UUIDv7",
+      "standard": "RFC 9562",
+      "generatedBy": "application-before-persist",
+      "databaseType": "uuid",
+      "jsonFormat": "lowercase-canonical-hyphenated",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "validExamples": [
+        "0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c493",
+        "019fb1d7-d968-78d0-b1a1-d7f2ac3e746b"
+      ],
+      "invalidExamples": [
+        "0194FDCB-8F5D-7CC3-98C5-3F2F0FB7C493",
+        "550e8400-e29b-41d4-a716-446655440000",
+        "12345",
+        "0194fdcb8f5d7cc398c53f2f0fb7c493"
+      ],
+      "orderingGuarantee": "index-locality-only-not-business-order"
+    },
+    "externalReferences": {
+      "databaseType": "varchar",
+      "rule": "preserve-provider-value-do-not-coerce-to-uuid",
+      "examples": ["oidc-sub", "external-order-id", "traceparent"]
+    },
+    "businessKeys": {
+      "scope": "tenant-and-workflow",
+      "databaseType": "varchar(200)",
+      "casePolicy": "case-sensitive-by-default",
+      "normalization": "none-without-domain-contract"
+    },
+    "idempotencyKeys": {
+      "scope": "tenant-operation-resource",
+      "transportMaxLength": 128,
+      "storage": "sha256-digest-plus-encrypted-or-redacted-metadata",
+      "opaque": true
+    }
+  },
+  "time": {
+    "javaType": "java.time.Instant",
+    "databaseType": "timestamp(6) with time zone",
+    "databaseAlias": "timestamptz(6)",
+    "precision": "microseconds",
+    "jsonFormat": "RFC3339-UTC-Z",
+    "jsonPattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,6})?Z$",
+    "validExamples": ["2026-07-30T11:00:00Z", "2026-07-30T11:00:00.123456Z"],
+    "invalidExamples": [
+      "2026-07-30 11:00:00",
+      "2026-07-30T19:00:00+08:00",
+      "2026-07-30T11:00:00.1234567Z",
+      "2026-13-30T11:00:00Z"
+    ],
+    "businessTimezone": "IANA-TZDB-zone-id-required",
+    "cronTimezoneExample": "Asia/Shanghai",
+    "intervalConvention": "start-inclusive-end-exclusive",
+    "durationFormat": "ISO-8601",
+    "databaseWriteClock": "transaction_timestamp()",
+    "applicationClock": "injected-java.time.Clock",
+    "implicitDslNowAllowed": false
+  },
+  "enums": {
+    "status": {
+      "canonicalForm": "UPPER_SNAKE_CASE",
+      "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
+      "validExamples": ["CREATED", "WAITING_TIMER", "CANCEL_REQUESTED"],
+      "invalidExamples": ["waiting_timer", "WaitingTimer", "WAITING-TIMER", "UNKNOWN"]
+    },
+    "discriminator": {
+      "canonicalForm": "lower_snake_case",
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+      "validExamples": ["http", "human_task", "fire_once"],
+      "invalidExamples": ["HTTP", "human-task", "HumanTask"]
+    },
+    "unknownRequiredValueAction": "reject-with-contract-error",
+    "unknownEventSchemaAction": "quarantine-and-alert",
+    "unknownOptionalFieldAction": "ignore",
+    "renameOrRemoveWithinMajor": "forbidden",
+    "persistAs": "varchar-with-check-or-reference-table",
+    "ordinalPersistenceAllowed": false,
+    "fallbackToFirstValueAllowed": false
+  },
+  "errorCodes": {
+    "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){2,}$",
+    "namespaces": [
+      "COMMON",
+      "AUTH",
+      "TENANT",
+      "DEFINITION",
+      "RUNTIME",
+      "SCHEDULER",
+      "HUMAN_TASK",
+      "WORKER",
+      "CONNECTOR"
+    ],
+    "categories": [
+      "VALIDATION",
+      "AUTHENTICATION",
+      "AUTHORIZATION",
+      "NOT_FOUND",
+      "CONFLICT",
+      "PRECONDITION_FAILED",
+      "PRECONDITION_REQUIRED",
+      "RATE_LIMIT",
+      "DEPENDENCY",
+      "INTERNAL"
+    ],
+    "validExamples": [
+      "COMMON_VALIDATION_INVALID_FIELD",
+      "AUTH_AUTHENTICATION_TOKEN_EXPIRED",
+      "TENANT_AUTHORIZATION_CROSS_TENANT",
+      "DEFINITION_PRECONDITION_FAILED_ETAG_MISMATCH",
+      "DEFINITION_PRECONDITION_REQUIRED_IF_MATCH",
+      "RUNTIME_CONFLICT_STALE_VERSION",
+      "HUMAN_TASK_CONFLICT_ALREADY_DECIDED",
+      "CONNECTOR_DEPENDENCY_TIMEOUT"
+    ],
+    "invalidExamples": [
+      "runtime_conflict_stale_version",
+      "RUNTIME_ERROR",
+      "UNKNOWN_INTERNAL_FAILURE",
+      "RUNTIME-CONFLICT-STALE",
+      "RUNTIME CONFLICT STALE"
+    ],
+    "stableWithinMajor": true,
+    "reuseAllowed": false,
+    "httpMappingOwnedBy": "G2-09",
+    "sensitiveDetailsAllowed": false
+  },
+  "audit": {
+    "mutableRecordFields": ["created_at", "created_by", "updated_at", "updated_by", "version"],
+    "tenantOwnedField": "tenant_id",
+    "softDeleteFields": ["deleted_at", "deleted_by", "deletion_reason"],
+    "privilegedReasonField": "reason",
+    "actorReferenceFormat": "<actor_type>:<stable_subject_id>",
+    "systemActorPrefix": "system:",
+    "optimisticVersion": {
+      "databaseType": "bigint",
+      "initialValue": 0,
+      "increment": 1,
+      "clientWritable": false
+    },
+    "auditLogFields": [
+      "tenant_id",
+      "actor_type",
+      "actor_id",
+      "action",
+      "resource_type",
+      "resource_id",
+      "occurred_at",
+      "reason",
+      "trace_id",
+      "source_ip",
+      "before_digest_or_redacted",
+      "after_digest_or_redacted"
+    ],
+    "secretOrSensitivePayloadAllowed": false
+  },
+  "deletion": {
+    "defaultStrategy": "explicit-lifecycle-not-generic-soft-delete",
+    "hardDeleteViaOrdinaryApiAllowed": false,
+    "strategies": [
+      {
+        "id": "lifecycle-status",
+        "appliesTo": ["tenant", "project", "workflow_definition"],
+        "rule": "disable-or-deactivate-with-status-and-audit; preserve references"
+      },
+      {
+        "id": "soft-delete",
+        "appliesTo": ["connector", "secret_reference"],
+        "rule": "set deleted_at/deleted_by/deletion_reason; default reads exclude; unique indexes are partial"
+      },
+      {
+        "id": "revocation",
+        "appliesTo": ["membership", "role_binding"],
+        "rule": "record revoked_at/revoked_by/reason instead of deleting authorization history"
+      },
+      {
+        "id": "immutable-history",
+        "appliesTo": ["workflow_version", "task_execution", "audit_log", "human_task_decision"],
+        "rule": "never soft-delete history; fully immutable records reject updates, task_execution permits only one trigger-guarded RUNNING-to-terminal finalization, and human_task permits only guarded transfer or first terminal resolution; terminal history is immutable and partition retention/purge is a controlled job"
+      },
+      {
+        "id": "retention-purge",
+        "appliesTo": ["workflow_instance", "node_instance", "schedule_occurrence", "outbox_event", "processed_event", "idempotency_record", "dead_letter", "worker_lease", "human_task", "quota_usage"],
+        "rule": "retain through replay, deduplication, late-result, decision-evidence, quota-accounting, and compliance windows; archive when required, then batch purge with metrics and audit"
+      },
+      {
+        "id": "regulated-erasure",
+        "appliesTo": ["personal_data"],
+        "rule": "approved erasure workflow anonymizes or deletes data while retaining non-sensitive audit tombstone"
+      }
+    ]
+  },
+  "sourceGuards": {
+    "forbiddenJavaTypes": ["java.time.LocalDateTime", "java.sql.Timestamp"],
+    "forbiddenSqlTokens": ["timestamp without time zone", "serial", "bigserial"],
+    "scanRoots": ["control-plane/src", "worker/src", "shared-contracts/src"],
+    "migrationRoot": "control-plane/src/main/resources/db/migration"
+  },
+  "document": "docs/architecture/domain-data-conventions.md"
+}

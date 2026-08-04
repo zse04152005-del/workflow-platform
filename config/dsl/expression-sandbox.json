@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-05",
+  "requirement": "REQ-DSL-001",
+  "module": "definition",
+  "pipelineInput": "com.workflowplatform.controlplane.definition.ValidatedWorkflowConfiguration",
+  "languages": {
+    "CEL": {
+      "profile": "workflow-cel-v1",
+      "sites": ["condition-node", "condition-edge"],
+      "operators": ["!", "-", "*", "/", "%", "+", "-", "<", "<=", ">", ">=", "==", "!=", "&&", "||"],
+      "literals": ["boolean", "integer", "number", "string", "null"],
+      "functionInvocationAllowed": false,
+      "methodInvocationAllowed": false,
+      "collectionLiteralsAllowed": false,
+      "comprehensionsAllowed": false
+    },
+    "JSON_PATH": {
+      "profile": "workflow-named-root-jsonpath-v1",
+      "sites": ["http-header", "http-body", "http-result", "delay-expires-at", "human-assignee", "edge-mapping"],
+      "roots": ["input", "output", "response", "node", "trigger"],
+      "segments": ["dot-property", "quoted-property", "array-index"],
+      "standardDollarRootAllowed": false,
+      "recursiveDescentAllowed": false,
+      "wildcardAllowed": false,
+      "filterAllowed": false,
+      "sliceAllowed": false,
+      "unionAllowed": false,
+      "scriptAllowed": false
+    }
+  },
+  "staticTyping": {
+    "types": ["NULL", "BOOLEAN", "INTEGER", "NUMBER", "STRING", "OBJECT", "ARRAY", "DYNAMIC"],
+    "schemaSource": ["inputSchema", "outputSchema"],
+    "closedObjectRejectsUnknownProperty": true,
+    "emptyOrUnsupportedSchemaFallsBackToDynamic": true,
+    "expectedTypes": {
+      "condition-node": "BOOLEAN",
+      "condition-edge": "BOOLEAN",
+      "http-header": "STRING",
+      "http-body": "DYNAMIC",
+      "http-result": "DYNAMIC",
+      "delay-expires-at": "STRING",
+      "human-assignee": "STRING",
+      "edge-mapping": "DYNAMIC"
+    }
+  },
+  "sandbox": {
+    "maximumTokens": 256,
+    "maximumAstNodes": 256,
+    "maximumNesting": 32,
+    "maximumPathSegments": 32,
+    "maximumEvaluationSteps": 512,
+    "timeoutMilliseconds": 25,
+    "maximumResultBytes": 262144,
+    "maximumResultDepth": 64,
+    "maximumResultEntries": 4096,
+    "clock": "monotonic",
+    "resultTypes": ["null", "string", "boolean", "finite-number", "array", "string-key-object"]
+  },
+  "determinism": {
+    "forbiddenIdentifiers": ["now", "random", "System", "Runtime", "class", "new", "import"],
+    "reflectionAllowed": false,
+    "networkAllowed": false,
+    "filesystemAllowed": false,
+    "environmentAllowed": false,
+    "threadCreationAllowed": false,
+    "sourceEchoedInFailure": false,
+    "compiledSourceBinding": "lower-case-sha256"
+  },
+  "failureCodes": [
+    "expression_syntax_invalid",
+    "expression_type_mismatch",
+    "expression_identifier_unknown",
+    "expression_operation_forbidden",
+    "expression_budget_exceeded"
+  ],
+  "result": {
+    "javaType": "com.workflowplatform.controlplane.definition.CompiledWorkflowExpressions",
+    "expressionType": "com.workflowplatform.controlplane.definition.CompiledExpression",
+    "runtimeGuard": "com.workflowplatform.controlplane.definition.ExpressionEvaluationGuard",
+    "immutable": true,
+    "containsExpressionSource": false
+  },
+  "deferred": {
+    "G3-07": "Validate API public error mapping",
+    "G4-12": "Condition node runtime evaluation and branch selection",
+    "G4-13": "HTTP mapping runtime evaluation and response extraction",
+    "G3-10": "property-based compiler and malicious-expression corpus"
+  },
+  "sourceBindings": {
+    "javaImplementation": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/DeterministicWorkflowExpressionCompiler.java",
+    "javaResult": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/CompiledWorkflowExpressions.java",
+    "javaPolicy": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/ExpressionSandboxPolicy.java",
+    "javaGuard": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/ExpressionEvaluationGuard.java",
+    "javaTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowExpressionCompilerTests.java",
+    "fixtures": "tests/contracts/dsl/expressions",
+    "verifier": "scripts/dsl/verify-expression-sandbox.mjs",
+    "verifierTests": "scripts/dsl/test-expression-sandbox-verifier.mjs"
+  },
+  "document": "docs/architecture/dsl-expression-sandbox.md"
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-self-loop",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "task", "type": "http", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_task", "from": "start", "to": "task", "on": "success" },
+    { "id": "task_loop", "from": "task", "to": "task", "on": "failure" },
+    { "id": "task_end", "from": "task", "to": "end", "on": "success" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "component": "observability-and-operations",
+  "tasks": ["G9-01", "G9-02", "G9-03", "G9-04", "G9-05", "G9-06", "G9-07", "G9-08", "G9-09"],
+  "tracing": ["OpenTelemetry", "runtime.trigger", "runtime.task", "runtime.scheduler", "message.context"],
+  "metrics": ["workflow_trigger_total", "task_duration_seconds", "queue_depth", "scheduler_lag_seconds", "lease_expired_total", "outbox_pending", "dead_letter_total"],
+  "highCardinality": "tenant/workflow/instance IDs remain query dimensions, never Prometheus labels",
+  "probes": ["liveness", "readiness", "startup", "dependency-degraded"],
+  "shutdown": ["stop-new-dispatch", "drain-or-handoff-lease", "stop-scheduler"],
+  "alerts": ["scheduler-lag", "queue-backlog", "outbox-stalled", "worker-drop", "dead-letter", "error-rate", "capacity"],
+  "runbook": "docs/operations/runbook.md"
+}

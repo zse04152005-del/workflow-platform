@@ -1,0 +1,17 @@
+{
+  "component": "test-fault-performance-recovery",
+  "tasks": ["G10-01", "G10-02", "G10-03", "G10-04", "G10-05", "G10-06", "G10-07", "G10-08", "G10-09", "G10-10", "G10-11"],
+  "unit": ["dsl", "state-transition", "retry", "signature", "redaction", "permission", "expression"],
+  "integration": ["postgresql", "kafka", "redis", "minio", "keycloak"],
+  "e2e": ["order-timeout-close", "large-refund-approval", "alert-handling"],
+  "faults": ["worker-kill", "outbox-before-mark-crash", "duplicate-consume", "database-short-outage", "kafka-backlog"],
+  "security": ["tenant-escalation", "idor", "ssrf", "webhook-replay", "expression-abuse", "payload-bomb"],
+  "performance": {
+    "hardware": "4 vCPU / 8 GiB / PostgreSQL 18 / Kafka 3",
+    "duration": "30m",
+    "scenarios": ["trigger-api", "short-task", "delay-task", "high-failure"],
+    "thresholds": { "triggerP95Ms": 500, "shortTaskP95Ms": 1000, "errorRate": 0.01, "schedulerLagSeconds": 5 }
+  },
+  "recovery": ["backup", "restore", "previous-version-upgrade", "rollback", "roll-forward"],
+  "evidence": "docs/planning/evidence/G10-test-performance-recovery-verification.md"
+}

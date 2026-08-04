@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-dangling-source",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [{ "id": "missing_end", "from": "missing", "to": "end", "on": "success" }]
+}

@@ -1,0 +1,21 @@
+workflow:
+  environment: test
+  database:
+    url: ${TEST_DATABASE_URL:jdbc:postgresql://127.0.0.1:15432/workflow_platform_test}
+    username: ${TEST_DATABASE_USERNAME:workflow_test}
+    password: ${TEST_DATABASE_PASSWORD:workflow-test-only}
+  kafka:
+    bootstrap-servers: ${TEST_KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+  redis:
+    host: ${TEST_REDIS_HOST:127.0.0.1}
+    port: ${TEST_REDIS_PORT:16379}
+    password: ${TEST_REDIS_PASSWORD:workflow-test-only}
+  object-storage:
+    endpoint: ${TEST_S3_ENDPOINT:http://127.0.0.1:19000}
+    access-key: ${TEST_S3_ACCESS_KEY:workflow_test}
+    secret-key: ${TEST_S3_SECRET_KEY:workflow-test-only}
+    bucket: ${TEST_S3_BUCKET:workflow-test-payloads}
+  observability:
+    otlp-endpoint: ${TEST_OTEL_ENDPOINT:http://127.0.0.1:4317}
+  worker:
+    concurrency: ${TEST_WORKER_CONCURRENCY:2}

@@ -1,0 +1,9 @@
+{
+  "faults": [
+    { "id": "worker-kill", "injection": "terminate worker after claim", "invariants": ["generation-increment", "late-result-reject", "history-immutable"] },
+    { "id": "outbox-before-mark-crash", "injection": "crash after broker send before sent mark", "invariants": ["duplicate-id", "consumer-dedup", "state-once"] },
+    { "id": "duplicate-consume", "injection": "deliver same event twice", "invariants": ["processed-event-once"] },
+    { "id": "database-short-outage", "injection": "fail JDBC for 5 seconds", "invariants": ["retryable-error", "no-partial-transition"] },
+    { "id": "kafka-backlog", "injection": "pause broker consumption", "invariants": ["queue-alert", "recovery-after-resume"] }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-outgoing-end",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_end", "from": "start", "to": "end", "on": "success" },
+    { "id": "end_start", "from": "end", "to": "start", "on": "always" }
+  ]
+}

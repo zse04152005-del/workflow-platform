@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-cycle",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "task_a", "type": "http", "executorVersion": 1 },
+    { "id": "task_b", "type": "http", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_a", "from": "start", "to": "task_a", "on": "success" },
+    { "id": "a_b", "from": "task_a", "to": "task_b", "on": "success" },
+    { "id": "b_a", "from": "task_b", "to": "task_a", "on": "failure" },
+    { "id": "b_end", "from": "task_b", "to": "end", "on": "success" }
+  ]
+}

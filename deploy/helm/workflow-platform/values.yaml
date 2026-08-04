@@ -1,0 +1,18 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/example/workflow-platform-control-plane
+  tag: immutable-git-sha
+  pullPolicy: IfNotPresent
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: 1, memory: 1Gi }
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+podDisruptionBudget:
+  minAvailable: 1
+networkPolicy:
+  enabled: true
+  allowedNamespaces: [workflow-platform]

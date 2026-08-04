@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-multiple-ends",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "request", "type": "http", "executorVersion": 1 },
+    { "id": "succeeded", "type": "end", "executorVersion": 1 },
+    { "id": "failed", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_request", "from": "start", "to": "request", "on": "always" },
+    { "id": "request_succeeded", "from": "request", "to": "succeeded", "on": "success" },
+    { "id": "request_failed", "from": "request", "to": "failed", "on": "failure" }
+  ]
+}

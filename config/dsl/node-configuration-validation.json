@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-04",
+  "requirement": "REQ-DSL-001",
+  "module": "definition",
+  "input": {
+    "graphType": "com.workflowplatform.controlplane.definition.ValidatedWorkflowGraph",
+    "contextType": "com.workflowplatform.controlplane.definition.WorkflowConfigurationValidationContext"
+  },
+  "triggerSchemas": {
+    "manual": { "required": [], "optional": [] },
+    "http": {
+      "required": ["authentication", "idempotencyRequired"],
+      "optional": ["hmacSecretRef"],
+      "authentication": ["oidc", "hmac"],
+      "hmacRequiresSecret": true,
+      "oidcForbidsHmacSecret": true,
+      "idempotencyRequired": true
+    },
+    "cron": {
+      "required": ["expression", "timezone", "misfirePolicy"],
+      "optional": ["catchUpLimit"],
+      "timezone": "IANA ZoneId",
+      "misfirePolicies": ["skip", "fire_once", "catch_up_limited"],
+      "catchUpLimitRange": [1, 100],
+      "catchUpLimitOnlyFor": "catch_up_limited"
+    }
+  },
+  "nodeSchemas": {
+    "start": { "required": [], "optional": [] },
+    "end": { "required": [], "optional": ["outcome"], "outcomes": ["succeeded", "failed"], "defaultOutcome": "succeeded" },
+    "http": {
+      "required": ["connectorRef", "method"],
+      "optional": ["secretRefs", "pathTemplate", "headers", "bodyExpression", "resultExpression"],
+      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+      "secretReferenceMaximum": 20,
+      "headerMaximum": 50
+    },
+    "condition": { "required": ["expression"], "optional": [] },
+    "delay": { "exactlyOne": ["duration", "expiresAtExpression"], "durationMustBePositive": true },
+    "human_task": {
+      "required": ["formSchema", "timeoutPolicy"],
+      "exactlyOne": ["candidateRole", "assigneeExpression"],
+      "timeoutPolicies": ["none", "fail", "auto_approve", "auto_reject", "escalate"],
+      "deadlineRequiredUnless": "none",
+      "deadlineForbiddenFor": "none"
+    }
+  },
+  "references": {
+    "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
+    "maximumLength": 200,
+    "resourceKinds": ["CONNECTOR", "SECRET"],
+    "lookupOrder": ["project", "tenant"],
+    "projectResourceShadowsTenantResource": true,
+    "crossTenantAllowed": false,
+    "crossProjectAllowed": false,
+    "deletedAllowed": false,
+    "publishableStatuses": ["ACTIVE"],
+    "secretMaterialLoaded": false,
+    "authorization": "explicit-kind-and-resource-id-use-grant"
+  },
+  "result": {
+    "javaType": "com.workflowplatform.controlplane.definition.ValidatedWorkflowConfiguration",
+    "typedTriggerVariants": ["manual", "http", "cron"],
+    "typedNodeVariants": ["start", "end", "http", "condition", "delay", "human_task"],
+    "immutable": true
+  },
+  "failureCodes": [
+    "trigger_schema_invalid",
+    "node_schema_invalid",
+    "parameter_type_invalid",
+    "connector_reference_invalid",
+    "connector_unavailable",
+    "connector_use_forbidden",
+    "secret_reference_invalid",
+    "secret_unavailable",
+    "secret_use_forbidden"
+  ],
+  "deferred": {
+    "G3-05": "CEL and JSONPath grammar, typing and resource sandbox",
+    "G3-07": "Validate API mapping and field-level public response",
+    "G6": "provider material retrieval, rotation workflows, SSRF policy and audit"
+  },
+  "sourceBindings": {
+    "dslSchema": "schemas/dsl/workflow-definition-v1.schema.json",
+    "javaImplementation": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/DeterministicWorkflowConfigurationValidator.java",
+    "javaResult": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/ValidatedWorkflowConfiguration.java",
+    "javaContext": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowConfigurationValidationContext.java",
+    "javaResource": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/IntegrationResource.java",
+    "javaTests": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/WorkflowConfigurationValidatorTests.java",
+    "fixtures": "tests/contracts/dsl/configuration",
+    "verifier": "scripts/dsl/verify-node-configuration-validation.mjs",
+    "verifierTests": "scripts/dsl/test-node-configuration-validation-verifier.mjs"
+  },
+  "document": "docs/architecture/dsl-node-configuration-validation.md"
+}

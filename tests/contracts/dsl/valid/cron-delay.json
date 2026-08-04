@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "name": "daily-report",
+  "catalogVersion": 1,
+  "triggers": [
+    {
+      "id": "daily_cron",
+      "type": "cron",
+      "expression": "0 0 8 * * ?",
+      "timezone": "Asia/Shanghai",
+      "misfirePolicy": "fire_once"
+    }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "settle_delay",
+      "type": "delay",
+      "executorVersion": 1,
+      "config": { "duration": "PT5M" }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "wait", "from": "start", "to": "settle_delay", "on": "success" },
+    { "id": "finish", "from": "settle_delay", "to": "end", "on": "success" }
+  ]
+}

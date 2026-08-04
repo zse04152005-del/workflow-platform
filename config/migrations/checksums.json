@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "migrations": {
+    "V1__create_tenant_and_rbac.sql": "e25262cbb5910192511f0817a1fd5f0929788bcb02f37ffc62bb182248c0288e",
+    "V2__create_definition_and_integrations.sql": "1ee8a70c4e8a0a6a3d2e00f77bbdd11aa34276886d24af40582e35145478fe01",
+    "V3__create_runtime_and_schedule.sql": "6e1519197f6e8b17c0bc1b2e17701ea0878741e6af5da1561090d845207acb66",
+    "V4__create_reliability_and_leases.sql": "394e585b0e2b22ce505851bc198c42ed40738540861f948640bc4ff6122c2961",
+    "V5__create_human_audit_and_quota.sql": "803776f6bb525e4726f90d20b76f708fc6baae82aaa5f1450529b85b55e7cd50",
+    "V6__add_workflow_draft_api_fields.sql": "e8f3e77cbf05969113ce19a15e39cc107987956c61e0563b742321934d4d95dd",
+    "V7__add_runtime_execution_snapshots.sql": "f97ff221d6cb1099889d7023ca81c2487cf4b028f8b625a6af80d6d6d3376116"
+  }
+}

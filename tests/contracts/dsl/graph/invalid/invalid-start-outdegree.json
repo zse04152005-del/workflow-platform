@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-start-outdegree",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "end_a", "type": "end", "executorVersion": 1 },
+    { "id": "end_b", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_a", "from": "start", "to": "end_a", "on": "success" },
+    { "id": "start_b", "from": "start", "to": "end_b", "on": "success" }
+  ]
+}

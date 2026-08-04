@@ -1,0 +1,12 @@
+{
+  "component": "web-console",
+  "tasks": ["G8-01", "G8-02", "G8-03", "G8-04", "G8-05", "G8-06", "G8-07", "G8-08", "G8-09", "G8-10", "G8-11"],
+  "auth": ["OIDC-login", "tenant-context", "route-guard", "error-boundary"],
+  "pages": ["overview", "workflows", "instances", "approvals", "operations", "integrations", "audit"],
+  "workflowEditor": ["form", "JSON/YAML", "schema-hints", "unsaved-protection", "dag-preview", "version-diff", "publish-confirmation"],
+  "runtime": ["business-key-search", "status-filter", "timeline", "node-input-output", "trace-link"],
+  "humanTask": ["inbox", "approve", "reject", "transfer"],
+  "operations": ["pause", "resume", "cancel-reason", "dead-letter", "replay"],
+  "security": ["opaque-secret-reference", "permission-hidden", "audit-query"],
+  "quality": ["keyboard-accessible", "empty-state", "loading", "error", "vitest"]
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "name": "linear-retry",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "notify_api",
+      "type": "http",
+      "executorVersion": 1,
+      "timeout": "PT10S",
+      "retry": {
+        "maxAttempts": 4,
+        "strategy": "linear",
+        "initialDelay": "PT1S",
+        "increment": "PT2S",
+        "maxDelay": "PT10S",
+        "maxElapsedTime": "PT30S",
+        "jitterRatio": 0.1
+      },
+      "config": {
+        "connectorRef": "notification.primary",
+        "method": "POST",
+        "bodyExpression": "input"
+      }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    {
+      "id": "start_to_notify",
+      "from": "start",
+      "to": "notify_api",
+      "on": "success",
+      "mapping": { "request.message": "input.message" }
+    },
+    { "id": "notify_to_end", "from": "notify_api", "to": "end", "on": "success" }
+  ],
+  "inputSchema": {
+    "type": "object",
+    "required": ["message"],
+    "properties": { "message": { "type": "string", "maxLength": 1000 } }
+  },
+  "outputSchema": { "type": "object" }
+}

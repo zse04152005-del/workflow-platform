@@ -1,0 +1,38 @@
+:root { color: #172321; background: #f3f5f2; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; }
+button, input, textarea, select { font: inherit; }
+code { padding: 3px 7px; color: #195955; background: #e5f1ee; border-radius: 5px; }
+.console-shell { min-height: 100vh; }
+.console-sider { position: sticky !important; top: 0; height: 100vh; background: #142522 !important; }
+.console-brand { display: flex; align-items: center; height: 72px; padding: 0 22px; gap: 12px; color: #fff; }
+.console-brand > span { display: grid; width: 36px; height: 36px; color: #10211e; font-weight: 800; background: #8ed3c3; border-radius: 9px; place-items: center; }
+.console-brand strong, .console-brand small { display: block; }
+.console-brand small { color: #91aaa4; font-size: 9px; letter-spacing: .16em; }
+.console-sider .ant-menu-dark { background: transparent; }
+.sider-status { position: absolute; right: 18px; bottom: 20px; left: 18px; display: grid; padding: 12px; gap: 4px; color: #bed0cb; background: #1c342f; border-radius: 8px; }
+.sider-status .ant-badge-status-text, .sider-status .ant-typography { color: #bed0cb; font-size: 11px; }
+.console-header { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 28px; background: #fff; border-bottom: 1px solid #e2e8e4; }
+.console-content { padding: 28px; }
+.console-content main { max-width: 1440px; margin: 0 auto; }
+.page-stack { display: flex; width: 100%; }
+.page-stack h2.ant-typography { margin: 0; font-size: 26px; }
+.welcome-card { display: flex; align-items: flex-end; justify-content: space-between; padding: 26px 30px; color: #e4f2ee; background: linear-gradient(110deg, #173d37, #23655b); border-radius: 12px; box-shadow: 0 14px 36px rgb(24 61 55 / 15%); }
+.welcome-card h1.ant-typography { max-width: 760px; margin: 7px 0 5px; color: #fff; font-size: clamp(28px, 4vw, 42px); }
+.welcome-card p.ant-typography { max-width: 680px; margin: 0; color: #c7ddd7; }
+.welcome-card .ant-badge-status-text { color: #e4f2ee; }
+.eyebrow { color: #8ed3c3 !important; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 16px; }
+.editor-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 16px; }
+.full-width { width: 100%; }
+.search-control { width: min(420px, 100%); }
+.code-editor textarea, .code-editor { color: #cfe8e0 !important; font: 13px/1.65 "Cascadia Code", Consolas, monospace !important; background: #142522 !important; }
+.dag-preview { display: flex; align-items: center; justify-content: center; min-height: 140px; gap: 12px; color: #58736d; }
+.dag-preview span { padding: 13px 18px; color: #143e38; font-weight: 650; background: #dff1ec; border: 1px solid #acd3c9; border-radius: 8px; }
+.card-actions { margin-top: 20px; }
+.ant-card, .ant-table-wrapper { border-color: #dde5e1; box-shadow: 0 5px 18px rgb(24 61 55 / 4%); }
+@media (max-width: 960px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid, .editor-grid { grid-template-columns: 1fr; } .console-header { padding: 0 16px; } .console-header .ant-typography { display: none; } }
+@media (max-width: 560px) { .console-content { padding: 18px 12px; } .stat-grid { grid-template-columns: 1fr; } .welcome-card { align-items: flex-start; flex-direction: column; gap: 18px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }

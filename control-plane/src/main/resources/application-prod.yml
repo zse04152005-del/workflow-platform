@@ -1,0 +1,46 @@
+server:
+  port: ${CONTROL_PLANE_PORT}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+spring:
+  datasource:
+    url: ${WORKFLOW_DATABASE_URL}
+    username: ${WORKFLOW_DATABASE_USERNAME}
+    password: ${WORKFLOW_DATABASE_PASSWORD}
+  flyway:
+    enabled: true
+    user: ${WORKFLOW_DATABASE_MIGRATION_USERNAME}
+    password: ${WORKFLOW_DATABASE_MIGRATION_PASSWORD}
+    placeholders:
+      workflowApplicationRole: ${WORKFLOW_DATABASE_APPLICATION_ROLE}
+      workflowPlatformAdminRole: ${WORKFLOW_DATABASE_PLATFORM_ADMIN_ROLE}
+
+workflow:
+  environment: prod
+  database:
+    url: ${WORKFLOW_DATABASE_URL}
+    username: ${WORKFLOW_DATABASE_USERNAME}
+    password: ${WORKFLOW_DATABASE_PASSWORD}
+  kafka:
+    bootstrap-servers: ${WORKFLOW_KAFKA_BOOTSTRAP_SERVERS}
+    publisher-enabled: ${WORKFLOW_KAFKA_PUBLISHER_ENABLED}
+    task-ready-topic: ${WORKFLOW_TASK_READY_TOPIC}
+    events-topic: ${WORKFLOW_EVENTS_TOPIC}
+  redis:
+    host: ${WORKFLOW_REDIS_HOST}
+    port: ${WORKFLOW_REDIS_PORT}
+    password: ${WORKFLOW_REDIS_PASSWORD}
+  object-storage:
+    endpoint: ${WORKFLOW_S3_ENDPOINT}
+    access-key: ${WORKFLOW_S3_ACCESS_KEY}
+    secret-key: ${WORKFLOW_S3_SECRET_KEY}
+    bucket: ${WORKFLOW_S3_BUCKET}
+  oidc:
+    issuer: ${WORKFLOW_OIDC_ISSUER}
+  observability:
+    otlp-endpoint: ${WORKFLOW_OTEL_ENDPOINT}

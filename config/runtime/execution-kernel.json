@@ -1,0 +1,25 @@
+{
+  "component": "runtime-execution-kernel",
+  "version": 1,
+  "tasks": {
+    "G4-04": { "artifact": "RuntimeInstanceSnapshot", "invariants": ["version-bound", "input-digest", "business-key", "actor", "trace"] },
+    "G4-05": { "artifact": "DagProgressor", "invariants": ["all-predecessors-succeeded", "failed-predecessor-cancels", "deterministic-order"] },
+    "G4-06": { "artifact": "DueTaskScanner", "invariants": ["due-status-only", "next-schedule-at", "bounded-batch", "claim-once"] },
+    "G4-07": { "artifact": "OutboxPublisher", "invariants": ["at-least-once", "mark-sent", "bounded-retry", "duplicate-id"] },
+    "G4-08": { "artifact": "TaskEventConsumer", "invariants": ["event-envelope", "processed-event-dedup", "retry-on-handler-failure"] },
+    "G4-09": { "artifact": "WorkerLeaseService", "invariants": ["exclusive-active-lease", "generation-increment", "heartbeat", "stale-fence-reject"] },
+    "G4-10": { "artifact": "WorkerExecutionService+WorkerTaskStore", "invariants": ["virtual-thread-timeout", "maximum-30-minutes", "bounded-output-reference", "redacted-error", "retry-classification"] },
+    "G4-11": { "artifact": "BuiltinWorkerNodeExecutor+JdbcRuntimeSchedulingStore", "invariants": ["start-end-identity", "all-nodes-converge", "audit-outbox-atomic"] },
+    "G4-12": { "artifact": "DeterministicConditionEvaluator", "invariants": ["boolean-result", "non-boolean-reject", "256-token-budget", "32-depth-budget"] },
+    "G4-13": { "artifact": "ManagedHttpWorkerNodeExecutor", "invariants": ["managed-https-host", "dns-ip-ssrf-guard", "header-body-mapping", "response-size", "retryable-408-429-5xx"] },
+    "G4-14": { "artifact": "BuiltinWorkerNodeExecutor.delay+JdbcRuntimeSchedulingStore", "invariants": ["database-schedule", "no-process-timer", "restart-safe"] },
+    "G4-15": { "artifact": "CronSchedulingService+JdbcCronSchedulingStore", "invariants": ["timezone-dst", "misfire-policy", "unique-occurrence", "skip-locked-claim", "overlap-control"] },
+    "G4-16": { "artifact": "RuntimeQueryController+JdbcRuntimeQueryStore", "invariants": ["instance-node-attempt", "keyset-created-at-id", "rls-nondisclosure", "payload-reference-only", "max-200"] }
+  },
+  "persistentAuthority": {
+    "state": "postgresql",
+    "dueIndex": "tenant_id,status,next_schedule_at,id",
+    "leaseFence": "worker_id,lease_generation,lease_expire_at",
+    "pagination": "created_at DESC,id DESC"
+  }
+}

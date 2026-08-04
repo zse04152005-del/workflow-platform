@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "unsafe-expression",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "unsafe_check",
+      "type": "condition",
+      "executorVersion": 1,
+      "config": { "expression": "now() > input.requestedAt" }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "check", "from": "start", "to": "unsafe_check", "on": "success" },
+    { "id": "finish", "from": "unsafe_check", "to": "end", "on": "success" }
+  ]
+}

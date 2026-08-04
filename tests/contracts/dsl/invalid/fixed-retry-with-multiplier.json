@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "name": "fixed-retry-with-multiplier",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "call_api",
+      "type": "http",
+      "executorVersion": 1,
+      "retry": {
+        "maxAttempts": 3,
+        "strategy": "fixed",
+        "initialDelay": "PT1S",
+        "multiplier": 2
+      },
+      "config": { "connectorRef": "service.primary", "method": "POST" }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "call", "from": "start", "to": "call_api", "on": "success" },
+    { "id": "finish", "from": "call_api", "to": "end", "on": "success" }
+  ]
+}

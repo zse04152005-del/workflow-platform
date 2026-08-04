@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "compat-extension",
+  "catalogVersion": 1,
+  "triggers": [
+    { "id": "manual", "type": "manual" }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_end", "from": "start", "to": "end", "on": "success" }
+  ],
+  "x-vendor": {
+    "enabled": true,
+    "policy": "preserve-but-ignore",
+    "revision": 1.00
+  }
+}

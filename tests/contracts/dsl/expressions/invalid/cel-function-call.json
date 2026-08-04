@@ -1,0 +1,6 @@
+{
+  "language": "CEL",
+  "site": "condition-node",
+  "source": "response() == null",
+  "expectedFailure": "expression_operation_forbidden"
+}

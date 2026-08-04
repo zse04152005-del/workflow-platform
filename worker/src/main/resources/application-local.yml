@@ -1,0 +1,21 @@
+workflow:
+  environment: local
+  database:
+    url: ${WORKFLOW_DATABASE_URL:jdbc:postgresql://127.0.0.1:15432/workflow_platform}
+    username: ${WORKFLOW_DATABASE_USERNAME:workflow_app}
+    password: ${WORKFLOW_DATABASE_PASSWORD}
+  kafka:
+    bootstrap-servers: ${WORKFLOW_KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+  redis:
+    host: ${WORKFLOW_REDIS_HOST:127.0.0.1}
+    port: ${WORKFLOW_REDIS_PORT:16379}
+    password: ${WORKFLOW_REDIS_PASSWORD}
+  object-storage:
+    endpoint: ${WORKFLOW_S3_ENDPOINT:http://127.0.0.1:19000}
+    access-key: ${WORKFLOW_S3_ACCESS_KEY:minio_local_admin}
+    secret-key: ${WORKFLOW_S3_SECRET_KEY}
+    bucket: ${WORKFLOW_S3_BUCKET:workflow-payloads}
+  observability:
+    otlp-endpoint: ${WORKFLOW_OTEL_ENDPOINT:http://127.0.0.1:4317}
+  worker:
+    concurrency: ${WORKFLOW_WORKER_CONCURRENCY:4}

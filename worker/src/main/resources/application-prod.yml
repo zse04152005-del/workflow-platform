@@ -1,0 +1,24 @@
+workflow:
+  environment: prod
+  database:
+    url: ${WORKFLOW_DATABASE_URL}
+    username: ${WORKFLOW_DATABASE_USERNAME}
+    password: ${WORKFLOW_DATABASE_PASSWORD}
+  kafka:
+    bootstrap-servers: ${WORKFLOW_KAFKA_BOOTSTRAP_SERVERS}
+  redis:
+    host: ${WORKFLOW_REDIS_HOST}
+    port: ${WORKFLOW_REDIS_PORT}
+    password: ${WORKFLOW_REDIS_PASSWORD}
+  object-storage:
+    endpoint: ${WORKFLOW_S3_ENDPOINT}
+    access-key: ${WORKFLOW_S3_ACCESS_KEY}
+    secret-key: ${WORKFLOW_S3_SECRET_KEY}
+    bucket: ${WORKFLOW_S3_BUCKET}
+  observability:
+    otlp-endpoint: ${WORKFLOW_OTEL_ENDPOINT}
+  worker:
+    concurrency: ${WORKFLOW_WORKER_CONCURRENCY}
+    kafka-enabled: ${WORKFLOW_WORKER_KAFKA_ENABLED}
+    consumer-name: ${WORKFLOW_WORKER_CONSUMER_NAME}
+    instance-id: ${WORKFLOW_WORKER_INSTANCE_ID}

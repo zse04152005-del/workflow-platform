@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "task": "G3-06",
+  "requirement": "REQ-DEF-001",
+  "operations": [
+    { "operationId": "createWorkflow", "method": "post", "path": "/api/v1/workflows", "successStatus": "201", "headers": ["Idempotency-Key"] },
+    { "operationId": "getWorkflow", "method": "get", "path": "/api/v1/workflows/{workflowId}", "successStatus": "200", "headers": [] },
+    { "operationId": "updateWorkflowDraft", "method": "put", "path": "/api/v1/workflows/{workflowId}/draft", "successStatus": "200", "headers": ["Idempotency-Key", "If-Match"] }
+  ],
+  "etag": {
+    "prefix": "wf-draft:",
+    "strongOnly": true,
+    "binds": ["workflowId", "draftRevision", "draftChecksum"],
+    "reject": ["missing", "weak", "wildcard", "list", "malformed", "stale", "other-workflow"],
+    "missingStatus": 428,
+    "mismatchStatus": 412
+  },
+  "idempotency": {
+    "table": "idempotency_record",
+    "scope": ["workflow:create", "workflow:draft:update:{workflowId}"],
+    "keyTransport": { "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9._~-]+$" },
+    "keyStoredAs": "sha256",
+    "requestStoredAs": "sha256",
+    "ttlHours": 24,
+    "expiredKeyAction": "reset-same-row-after-expiry-under-lock",
+    "sameTransactionAsWrite": true,
+    "differentRequestStatus": 409
+  },
+  "tenantBoundary": {
+    "source": "trusted-request-attribute",
+    "clientTenantHeaderAllowed": false,
+    "databaseContextFunction": "public.app_set_tenant_context",
+    "forcedRlsRequired": true,
+    "crossTenantReadStatus": 404
+  },
+  "persistence": {
+    "migration": "V6__add_workflow_draft_api_fields.sql",
+    "initialRevision": 1,
+    "updatePredicates": ["id", "draft_revision", "draft_checksum"],
+    "atomicChanges": ["draft_dsl", "draft_revision", "draft_checksum", "updated_at", "updated_by", "version"]
+  },
+  "problemCodes": {
+    "missingIfMatch": "DEFINITION_PRECONDITION_REQUIRED_IF_MATCH",
+    "etagMismatch": "DEFINITION_PRECONDITION_FAILED_ETAG_MISMATCH",
+    "notFound": "COMMON_NOT_FOUND_RESOURCE",
+    "conflict": "COMMON_CONFLICT_STATE"
+  },
+  "sourceBindings": {
+    "controller": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowDraftController.java",
+    "service": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/WorkflowDraftService.java",
+    "etag": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/StrongDraftEtag.java",
+    "store": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStore.java",
+    "idempotencyRecords": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/JdbcIdempotencyRecords.java",
+    "jsonConfiguration": "control-plane/src/main/java/com/workflowplatform/controlplane/definition/internal/WorkflowDraftJacksonConfiguration.java",
+    "requestContext": "control-plane/src/main/java/com/workflowplatform/controlplane/security/WorkflowRequestContext.java",
+    "resolver": "control-plane/src/main/java/com/workflowplatform/controlplane/security/internal/WorkflowRequestContextArgumentResolver.java",
+    "integrationTest": "control-plane/src/test/java/com/workflowplatform/controlplane/definition/internal/JdbcWorkflowDraftStoreIT.java"
+  },
+  "document": "docs/architecture/workflow-draft-api.md"
+}

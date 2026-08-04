@@ -1,0 +1,6 @@
+{
+  "language": "JSON_PATH",
+  "site": "edge-mapping",
+  "source": "input.items[?(@.enabled)]",
+  "expectedFailure": "expression_operation_forbidden"
+}

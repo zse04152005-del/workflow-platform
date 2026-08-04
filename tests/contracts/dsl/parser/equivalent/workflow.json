@@ -1,0 +1,26 @@
+{
+  "extension": { "unicode": "é" },
+  "metadata": { "owner": "platform" },
+  "edges": [
+    {
+      "to": "end",
+      "mapping": { "zeta": "input.z", "alpha": "input.a" },
+      "from": "start",
+      "id": "edge",
+      "on": "success"
+    }
+  ],
+  "nodes": [
+    {
+      "executorVersion": 1,
+      "id": "start",
+      "type": "start",
+      "config": { "zeta": 1.00, "alpha": -0.0, "array": [2, 1] }
+    },
+    { "outcome": "succeeded", "executorVersion": 1, "type": "end", "id": "end" }
+  ],
+  "triggers": [{ "disabled": "off", "type": "manual", "enabled": "yes", "id": "manual" }],
+  "catalogVersion": 1,
+  "name": "parser-equivalence",
+  "schemaVersion": 1
+}

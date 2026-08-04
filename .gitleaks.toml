@@ -1,0 +1,27 @@
+title = "Workflow Platform secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "workflow-generic-assigned-secret"
+description = "Generic hard-coded password, token, or secret assignment"
+regex = '''(?i)(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*["']?([A-Za-z0-9+/=_!@#$%^&*.-]{12,})["']?'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["password", "passwd", "pwd", "secret", "api_key", "api-key", "token"]
+
+[rules.allowlist]
+description = "Explicit non-production examples and test-only placeholders"
+regexTarget = "secret"
+regexes = [
+  '''(?i)^[-A-Za-z0-9_]*local-only-change-me$''',
+  '''(?i)^[-A-Za-z0-9_]*test-only$'''
+]
+
+[[allowlists]]
+description = "G3-06; owner=platform-security; Flyway manifest SHA-256 lines only; expires=2027-07-31"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^config/migrations/checksums\.json$''']
+regexes = ['''^\s*"V[1-9][0-9]*__[A-Za-z0-9_]+\.sql":\s*"[0-9a-f]{64}"[,]?\s*$''']

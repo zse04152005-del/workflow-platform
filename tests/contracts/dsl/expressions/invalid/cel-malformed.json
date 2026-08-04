@@ -1,0 +1,6 @@
+{
+  "language": "CEL",
+  "site": "condition-node",
+  "source": "input.approved &&",
+  "expectedFailure": "expression_syntax_invalid"
+}

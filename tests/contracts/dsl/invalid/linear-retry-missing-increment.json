@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "name": "linear-retry-missing-increment",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "call_api",
+      "type": "http",
+      "executorVersion": 1,
+      "retry": {
+        "maxAttempts": 3,
+        "strategy": "linear",
+        "initialDelay": "PT1S"
+      },
+      "config": { "connectorRef": "service.primary", "method": "POST" }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "call", "from": "start", "to": "call_api", "on": "success" },
+    { "id": "finish", "from": "call_api", "to": "end", "on": "success" }
+  ]
+}

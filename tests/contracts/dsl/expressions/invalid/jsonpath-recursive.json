@@ -1,0 +1,6 @@
+{
+  "language": "JSON_PATH",
+  "site": "delay-expires-at",
+  "source": "input..expires_at",
+  "expectedFailure": "expression_operation_forbidden"
+}

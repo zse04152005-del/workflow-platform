@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-missing-start",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "task", "type": "http", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [{ "id": "task_end", "from": "task", "to": "end", "on": "success" }]
+}

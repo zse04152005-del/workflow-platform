@@ -1,0 +1,32 @@
+schemaVersion: 1
+name: parser-equivalence
+catalogVersion: 1
+triggers:
+  - id: manual
+    enabled: yes
+    disabled: off
+    type: manual
+nodes:
+  - type: start
+    id: start
+    executorVersion: 1
+    config:
+      array: [2, 1]
+      zeta: 1.0
+      alpha: -0.00
+  - id: end
+    type: end
+    executorVersion: 1
+    outcome: succeeded
+edges:
+  - id: edge
+    from: start
+    to: end
+    on: success
+    mapping:
+      zeta: input.z
+      alpha: input.a
+metadata:
+  owner: platform
+extension:
+  unicode: é

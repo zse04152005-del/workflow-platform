@@ -1,0 +1,18 @@
+{
+  "component": "runtime-trigger",
+  "version": 1,
+  "operations": ["manual", "http"],
+  "path": "/api/v1/workflows/{workflowId}/instances",
+  "requiredHeaders": ["Idempotency-Key"],
+  "optionalHeaders": ["Traceparent"],
+  "requestDigest": "sha256(length-prefixed workflowId, triggerType, businessKey, canonicalInput, traceId)",
+  "replayWindowHours": 24,
+  "replayRules": {
+    "sameKeySameDigest": "return original 202 response and instance reference",
+    "sameKeyDifferentDigest": "409 conflict",
+    "expiredKey": "new processing claim",
+    "concurrentKey": "single PROCESSING owner"
+  },
+  "transactionBoundary": ["idempotency_record", "workflow_instance", "node_instance", "audit_log", "outbox_event"],
+  "security": ["tenant-context-before-query", "forced-rls", "input-object-only", "input-max-1MiB", "trace-id-nonzero"]
+}

@@ -1,0 +1,7 @@
+{
+  "scenarios": [
+    { "id": "order-timeout-close", "steps": ["publish", "http-trigger", "condition", "delay", "end"], "assertions": ["single-instance", "persistent-timer", "terminal-success"] },
+    { "id": "large-refund-approval", "steps": ["trigger", "create-human-task", "approve", "audit"], "assertions": ["first-decision", "redacted-form", "trace-linked"] },
+    { "id": "alert-handling", "steps": ["trigger", "http-timeout", "retry", "dead-letter", "replay"], "assertions": ["bounded-retry", "redacted-dlq", "new-attempt"] }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "name": "scheduled-review",
+  "catalogVersion": 1,
+  "triggers": [
+    {
+      "id": "schedule",
+      "type": "cron",
+      "expression": "0 0 * * *",
+      "timezone": "Asia/Shanghai",
+      "misfirePolicy": "catch_up_limited",
+      "catchUpLimit": 5
+    }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "wait",
+      "type": "delay",
+      "executorVersion": 1,
+      "config": { "duration": "PT5M" }
+    },
+    {
+      "id": "review",
+      "type": "human_task",
+      "executorVersion": 1,
+      "config": {
+        "assigneeExpression": "input.owner",
+        "formSchema": { "type": "object" },
+        "timeoutPolicy": "none"
+      }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1, "outcome": "succeeded" }
+  ],
+  "edges": [
+    { "id": "start_wait", "from": "start", "to": "wait", "on": "success" },
+    { "id": "wait_review", "from": "wait", "to": "review", "on": "success" },
+    { "id": "review_end", "from": "review", "to": "end", "on": "success" }
+  ]
+}

@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: workflow-worker
+  datasource:
+    url: ${WORKFLOW_DATABASE_URL:jdbc:postgresql://127.0.0.1:15432/workflow_platform}
+    username: ${WORKFLOW_DATABASE_USERNAME:workflow_app}
+    password: ${WORKFLOW_DATABASE_PASSWORD:workflow-worker-local-only-change-me}
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: ${WORKFLOW_KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+  config:
+    import: optional:file:.env[.properties]
+  main:
+    web-application-type: none
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  profiles:
+    default: local
+
+workflow:
+  kafka:
+    task-ready-topic: ${WORKFLOW_TASK_READY_TOPIC:workflow.task.ready}
+  worker:
+    kafka-enabled: ${WORKFLOW_WORKER_KAFKA_ENABLED:false}
+    consumer-name: ${WORKFLOW_WORKER_CONSUMER_NAME:workflow-worker}
+    instance-id: ${WORKFLOW_WORKER_INSTANCE_ID:worker-local}
+    http:
+      allowed-hosts: ${WORKFLOW_HTTP_ALLOWED_HOSTS:}
+      maximum-response-bytes: ${WORKFLOW_HTTP_MAXIMUM_RESPONSE_BYTES:4096}

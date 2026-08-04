@@ -1,0 +1,68 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+
+# Java and Maven
+**/target/
+*.class
+*.hprof
+.mvn/timing.properties
+
+# Node and frontend tooling
+**/node_modules/
+**/dist/
+**/.vite/
+**/.turbo/
+**/.eslintcache
+**/coverage/
+**/playwright-report/
+**/test-results/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+!control-plane/src/main/resources/application-local.yml
+!worker/src/main/resources/application-local.yml
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Logs, runtime data and temporary files
+*.log
+/logs/
+/data/
+/tmp/
+/.docker/
+*.pid
+*.seed
+
+# Test and profiling artifacts
+*.exec
+*.jfr
+*.prof
+/tests/results/
+/tests/artifacts/
+
+# Generated contracts and reports
+**/generated/
+/reports/

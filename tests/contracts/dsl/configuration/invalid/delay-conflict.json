@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "delay-conflict",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "wait",
+      "type": "delay",
+      "executorVersion": 1,
+      "config": { "duration": "PT5M", "expiresAtExpression": "input.expires_at" }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "start_wait", "from": "start", "to": "wait", "on": "success" },
+    { "id": "wait_end", "from": "wait", "to": "end", "on": "success" }
+  ]
+}

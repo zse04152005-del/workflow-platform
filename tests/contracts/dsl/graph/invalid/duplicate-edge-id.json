@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "graph-duplicate-edge",
+  "catalogVersion": 1,
+  "triggers": [{ "id": "manual", "type": "manual" }],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    { "id": "task", "type": "http", "executorVersion": 1 },
+    { "id": "end", "type": "end", "executorVersion": 1 }
+  ],
+  "edges": [
+    { "id": "route", "from": "start", "to": "task", "on": "success" },
+    { "id": "route", "from": "task", "to": "end", "on": "success" }
+  ]
+}

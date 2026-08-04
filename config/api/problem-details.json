@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "reviewedOn": "2026-07-30",
+  "task": "G2-09",
+  "requirement": "REQ-CONTRACT-001",
+  "standard": "RFC 9457",
+  "mediaType": "application/problem+json",
+  "typeBaseUri": "https://api.workflow-platform.example/problems/",
+  "problem": {
+    "requiredStandardMembers": ["type", "title", "status", "detail", "instance"],
+    "requiredExtensions": ["code", "traceId", "errors", "retryable"],
+    "optionalExtensions": ["retryAfterSeconds"],
+    "instancePolicy": "request-path-only",
+    "queryAllowedInInstance": false,
+    "additionalMembersAllowed": false
+  },
+  "trace": {
+    "pattern": "^[0-9a-f]{32}$",
+    "allZeroAllowed": false,
+    "sourceOrder": ["traceparent", "X-Correlation-ID", "generated"],
+    "traceparentPattern": "^(?!ff)[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$",
+    "responseHeader": "X-Trace-Id",
+    "invalidInboundAction": "ignore-and-generate",
+    "generatedBy": "application-cryptographic-random-128-bit"
+  },
+  "validation": {
+    "errorsProperty": "errors",
+    "fieldErrorMembers": ["field", "code", "message"],
+    "fieldPathPattern": "^(?:_request|[A-Za-z][A-Za-z0-9_]*(?:\\[(?:0|[1-9][0-9]*)\\]|\\.[A-Za-z][A-Za-z0-9_]*)*)$",
+    "fieldCodePattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+    "allowedFieldCodes": ["required", "invalid_format", "invalid_size", "out_of_range", "invalid_type", "invalid"],
+    "order": ["field", "code", "message"],
+    "maxErrors": 50,
+    "rejectedValueAllowed": false,
+    "frameworkMessageAllowed": false,
+    "messageSource": "curated-static-catalog"
+  },
+  "headers": {
+    "cacheControl": "no-store",
+    "authenticationChallenge": "Bearer",
+    "retryAfterHeader": "Retry-After"
+  },
+  "sanitization": {
+    "dynamicDetailAllowed": false,
+    "internalDetailSource": "static-catalog-only",
+    "forbiddenResponseMembers": [
+      "rejectedValue",
+      "exception",
+      "exceptionClass",
+      "stackTrace",
+      "sql",
+      "rawPayload",
+      "token",
+      "password",
+      "secret",
+      "authorization",
+      "cookie"
+    ],
+    "logsMayContainStackTrace": true,
+    "responseMayContainStackTrace": false
+  },
+  "categoryStatus": {
+    "VALIDATION": 400,
+    "AUTHENTICATION": 401,
+    "AUTHORIZATION": 403,
+    "NOT_FOUND": 404,
+    "CONFLICT": 409,
+    "PRECONDITION_FAILED": 412,
+    "PRECONDITION_REQUIRED": 428,
+    "RATE_LIMIT": 429,
+    "DEPENDENCY": 503,
+    "INTERNAL": 500
+  },
+  "catalog": [
+    {
+      "code": "COMMON_VALIDATION_INVALID_FIELD",
+      "category": "VALIDATION",
+      "status": 400,
+      "type": "https://api.workflow-platform.example/problems/invalid-field",
+      "title": "Request validation failed",
+      "detail": "One or more request fields are invalid.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_VALIDATION_MALFORMED_REQUEST",
+      "category": "VALIDATION",
+      "status": 400,
+      "type": "https://api.workflow-platform.example/problems/malformed-request",
+      "title": "Malformed request",
+      "detail": "The request body or syntax is malformed.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_VALIDATION_MISSING_PARAMETER",
+      "category": "VALIDATION",
+      "status": 400,
+      "type": "https://api.workflow-platform.example/problems/missing-parameter",
+      "title": "Required parameter is missing",
+      "detail": "A required request parameter is missing.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_VALIDATION_TYPE_MISMATCH",
+      "category": "VALIDATION",
+      "status": 400,
+      "type": "https://api.workflow-platform.example/problems/type-mismatch",
+      "title": "Request value has the wrong type",
+      "detail": "A request value could not be converted to the required type.",
+      "retryable": false
+    },
+    {
+      "code": "AUTH_AUTHENTICATION_REQUIRED",
+      "category": "AUTHENTICATION",
+      "status": 401,
+      "type": "https://api.workflow-platform.example/problems/authentication-required",
+      "title": "Authentication required",
+      "detail": "Valid authentication credentials are required.",
+      "retryable": false
+    },
+    {
+      "code": "AUTH_AUTHORIZATION_DENIED",
+      "category": "AUTHORIZATION",
+      "status": 403,
+      "type": "https://api.workflow-platform.example/problems/authorization-denied",
+      "title": "Access denied",
+      "detail": "The authenticated principal is not allowed to perform this operation.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_NOT_FOUND_RESOURCE",
+      "category": "NOT_FOUND",
+      "status": 404,
+      "type": "https://api.workflow-platform.example/problems/resource-not-found",
+      "title": "Resource not found",
+      "detail": "The requested resource was not found.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_CONFLICT_STATE",
+      "category": "CONFLICT",
+      "status": 409,
+      "type": "https://api.workflow-platform.example/problems/state-conflict",
+      "title": "Resource state conflict",
+      "detail": "The operation conflicts with the current resource state.",
+      "retryable": false
+    },
+    {
+      "code": "DEFINITION_PRECONDITION_FAILED_ETAG_MISMATCH",
+      "category": "PRECONDITION_FAILED",
+      "status": 412,
+      "type": "https://api.workflow-platform.example/problems/etag-mismatch",
+      "title": "Draft precondition failed",
+      "detail": "The supplied draft ETag does not match the current revision.",
+      "retryable": false
+    },
+    {
+      "code": "DEFINITION_PRECONDITION_REQUIRED_IF_MATCH",
+      "category": "PRECONDITION_REQUIRED",
+      "status": 428,
+      "type": "https://api.workflow-platform.example/problems/if-match-required",
+      "title": "Draft precondition required",
+      "detail": "A strong If-Match header is required for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "COMMON_RATE_LIMIT_EXCEEDED",
+      "category": "RATE_LIMIT",
+      "status": 429,
+      "type": "https://api.workflow-platform.example/problems/rate-limit-exceeded",
+      "title": "Rate limit exceeded",
+      "detail": "The request rate limit has been exceeded.",
+      "retryable": true
+    },
+    {
+      "code": "CONNECTOR_DEPENDENCY_UNAVAILABLE",
+      "category": "DEPENDENCY",
+      "status": 503,
+      "type": "https://api.workflow-platform.example/problems/dependency-unavailable",
+      "title": "Dependency unavailable",
+      "detail": "A required dependency is temporarily unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "COMMON_INTERNAL_UNEXPECTED",
+      "category": "INTERNAL",
+      "status": 500,
+      "type": "https://api.workflow-platform.example/problems/unexpected-error",
+      "title": "Unexpected server error",
+      "detail": "An unexpected error occurred.",
+      "retryable": false
+    }
+  ],
+  "sourceBindings": {
+    "problemCode": "shared-contracts/src/main/java/com/workflowplatform/contracts/problem/ProblemCode.java",
+    "fieldError": "shared-contracts/src/main/java/com/workflowplatform/contracts/problem/FieldValidationError.java",
+    "responseFactory": "control-plane/src/main/java/com/workflowplatform/controlplane/api/error/ProblemDetailsResponseFactory.java",
+    "exceptionHandler": "control-plane/src/main/java/com/workflowplatform/controlplane/api/error/GlobalProblemDetailsHandler.java",
+    "validationMapper": "control-plane/src/main/java/com/workflowplatform/controlplane/api/error/FieldValidationErrorMapper.java"
+  },
+  "document": "docs/architecture/problem-details-contract.md"
+}

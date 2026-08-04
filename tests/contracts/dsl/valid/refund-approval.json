@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "name": "refund-approval",
+  "description": "Route large refunds to a human reviewer before calling the payment connector.",
+  "catalogVersion": 1,
+  "triggers": [
+    {
+      "id": "refund_http",
+      "type": "http",
+      "authentication": "oidc",
+      "idempotencyRequired": true
+    }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "executorVersion": 1 },
+    {
+      "id": "risk_check",
+      "type": "condition",
+      "executorVersion": 1,
+      "config": { "expression": "input.amount <= 500" }
+    },
+    {
+      "id": "manual_approval",
+      "type": "human_task",
+      "executorVersion": 1,
+      "config": {
+        "candidateRole": "finance_reviewer",
+        "formSchema": {
+          "type": "object",
+          "properties": { "comment": { "type": "string", "maxLength": 500 } }
+        },
+        "deadline": "PT24H",
+        "timeoutPolicy": "fail"
+      }
+    },
+    {
+      "id": "refund_api",
+      "type": "http",
+      "executorVersion": 1,
+      "timeout": "PT10S",
+      "retry": {
+        "maxAttempts": 5,
+        "strategy": "exponential",
+        "initialDelay": "PT1S",
+        "maxDelay": "PT30S",
+        "multiplier": 2,
+        "jitterRatio": 0.2
+      },
+      "config": {
+        "connectorRef": "payment.refund",
+        "method": "POST",
+        "bodyExpression": "input",
+        "resultExpression": "response.body"
+      }
+    },
+    { "id": "end", "type": "end", "executorVersion": 1, "outcome": "succeeded" }
+  ],
+  "edges": [
+    { "id": "start_to_risk", "from": "start", "to": "risk_check", "on": "success" },
+    {
+      "id": "small_refund",
+      "from": "risk_check",
+      "to": "refund_api",
+      "on": "condition",
+      "when": "input.amount <= 500"
+    },
+    {
+      "id": "large_refund",
+      "from": "risk_check",
+      "to": "manual_approval",
+      "on": "condition",
+      "when": "input.amount > 500"
+    },
+    {
+      "id": "approved_refund",
+      "from": "manual_approval",
+      "to": "refund_api",
+      "on": "success"
+    },
+    { "id": "refund_done", "from": "refund_api", "to": "end", "on": "success" }
+  ],
+  "inputSchema": {
+    "type": "object",
+    "required": ["amount"],
+    "properties": { "amount": { "type": "number", "minimum": 0 } }
+  }
+}

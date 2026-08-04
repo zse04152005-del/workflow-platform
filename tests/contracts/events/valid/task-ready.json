@@ -1,0 +1,13 @@
+{
+  "eventId": "019fb1d7-d968-78d0-b1a1-d7f2ac3e746b",
+  "eventType": "workflow.task.ready",
+  "occurredAt": "2026-07-30T17:01:00Z",
+  "tenantId": "0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c493",
+  "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "schemaVersion": 1,
+  "producer": "scheduler",
+  "payload": {
+    "taskId": "019fb1d7-d968-78d0-b1a1-d7f2ac3e746b",
+    "leaseGeneration": 1
+  }
+}

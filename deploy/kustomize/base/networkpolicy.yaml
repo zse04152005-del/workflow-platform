@@ -1,0 +1,6 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: workflow-platform }
+spec:
+  podSelector: { matchLabels: { app: workflow-platform } }
+  policyTypes: [Ingress, Egress]
