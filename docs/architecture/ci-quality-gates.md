@@ -44,6 +44,7 @@ Action 的可读版本只写在注释中，真正执行引用必须是 40 位 co
 ## 4. 缓存与可复现性
 
 - setup-java 使用 Maven 缓存；依赖仍受 POM、Wrapper 严格 checksum 和 Enforcer 约束。
+- Maven Wrapper `mvnw` 必须以 Git 模式 `100755` 提交，保证 Linux Runner 可直接执行；CI 契约会读取 Git 索引阻断模式漂移。
 - Web Job 先安装固定 pnpm，再由 setup-node 使用 pnpm 缓存，安装必须带 `--frozen-lockfile`。
 - 仅执行 Node 脚本的 workflow/Compose Job 显式设置 `package-manager-cache: false`，避免 setup-node 根据根 `packageManager` 自动寻找尚未安装的 pnpm。
 - 缓存只加速下载，不缓存构建结果来替代编译/测试。

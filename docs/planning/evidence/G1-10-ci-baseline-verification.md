@@ -14,6 +14,7 @@
 - checkout/setup-java/setup-node/pnpm action 全部使用完整 40 位 commit SHA。
 - Temurin JDK 21.0.12+8（GitHub Runner 目录标识 `21.0.12+8.0.LTS`）、Maven 3.9.16 Wrapper、Node 24.14.0、pnpm 11.9.0 精确运行时契约。
 - Web Job 在 setup-node 的 pnpm 缓存前安装 pnpm；不使用包管理器的 workflow/Compose Job 关闭自动 package-manager cache，避免 setup-node 启动阶段依赖未安装的 pnpm。
+- Linux Runner 入口 `mvnw` 以 Git 模式 `100755` 提交，并由 CI 契约直接校验索引模式，防止 Windows 工作树丢失可执行位。
 - 固定 digest 的 actionlint 语法/表达式/Shell 校验和结构性 CI 安全策略校验。
 - 固定目录、命名、编码、版本唯一性与 SHA-256 不可变目录的迁移门禁。
 - 未登记迁移、已登记迁移、篡改迁移三段临时反向测试。

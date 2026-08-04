@@ -76,6 +76,29 @@ if (packageManagerCacheDisabledCount !== 2) {
   );
 }
 
+const wrapperIndex = spawnSync(
+  'git',
+  [
+    '-c',
+    `safe.directory=${repositoryRoot.replaceAll('\\', '/')}`,
+    '-C',
+    repositoryRoot,
+    'ls-files',
+    '--stage',
+    '--',
+    'mvnw',
+  ],
+  {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+  },
+);
+if (wrapperIndex.error) throw wrapperIndex.error;
+if (wrapperIndex.status !== 0 || !/^100755\s/u.test(wrapperIndex.stdout)) {
+  fail(`mvnw must be committed with executable mode 100755; index=${wrapperIndex.stdout.trim()}`);
+}
+
 const actionlint = spawnSync(
   'docker',
   [
