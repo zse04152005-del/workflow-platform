@@ -21,8 +21,9 @@ for (const required of [
   'cancel-in-progress: true',
   'runs-on: ubuntu-24.04',
   'persist-credentials: false',
-  'java-version: "21.0.12+8"',
+  'java-version: "21.0.12+8.0.LTS"',
   'node-version-file: .node-version',
+  'package-manager-cache: false',
   'version: 11.9.0',
   './mvnw -B -ntp clean verify',
   'pnpm install --frozen-lockfile',
@@ -66,6 +67,13 @@ const checkoutCount = actionReferences.filter((match) => match[1] === 'actions/c
 const credentialProtectionCount = (workflow.match(/persist-credentials:\s+false/gu) ?? []).length;
 if (checkoutCount !== jobCount || credentialProtectionCount !== checkoutCount) {
   fail('Every job must check out with persist-credentials=false');
+}
+const packageManagerCacheDisabledCount =
+  (workflow.match(/package-manager-cache:\s+false/gu) ?? []).length;
+if (packageManagerCacheDisabledCount !== 2) {
+  fail(
+    `Expected workflow-only and Compose-only jobs to disable automatic package-manager caching; found ${packageManagerCacheDisabledCount}`,
+  );
 }
 
 const actionlint = spawnSync(

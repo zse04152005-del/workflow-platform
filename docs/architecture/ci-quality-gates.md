@@ -28,7 +28,7 @@ Job 相互独立，能在 GitHub UI 中直接区分 Java、Web/策略、工作�
 | 组件 | 版本 | 固定引用 |
 |---|---|---|
 | Ubuntu Runner | 24.04 | `ubuntu-24.04` |
-| Temurin JDK | 21.0.12+8 | setup-java 输入 |
+| Temurin JDK | 21.0.12+8.0.LTS | setup-java Runner 目录标识（本地发行版为 21.0.12+8） |
 | Maven | 3.9.16 | Maven Wrapper + distribution SHA-256 |
 | Node.js | 24.14.0 | `.node-version` |
 | pnpm | 11.9.0 | packageManager + action 输入 |
@@ -44,7 +44,8 @@ Action 的可读版本只写在注释中，真正执行引用必须是 40 位 co
 ## 4. 缓存与可复现性
 
 - setup-java 使用 Maven 缓存；依赖仍受 POM、Wrapper 严格 checksum 和 Enforcer 约束。
-- setup-node 使用 pnpm 缓存，安装必须带 `--frozen-lockfile`。
+- Web Job 先安装固定 pnpm，再由 setup-node 使用 pnpm 缓存，安装必须带 `--frozen-lockfile`。
+- 仅执行 Node 脚本的 workflow/Compose Job 显式设置 `package-manager-cache: false`，避免 setup-node 根据根 `packageManager` 自动寻找尚未安装的 pnpm。
 - 缓存只加速下载，不缓存构建结果来替代编译/测试。
 - Gitleaks/actionlint 镜像固定 digest；Docker 拉取到错误内容时由 digest 校验阻断。
 - CI 不自动格式化、改写 checksum 或提交代码，只做只读验证。
