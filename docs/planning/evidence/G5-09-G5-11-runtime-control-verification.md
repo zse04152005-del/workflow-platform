@@ -61,6 +61,6 @@ pnpm run contracts:public:verify  PASS（21 operations）
 pnpm run contracts:public:test    PASS（23 reverse mutations）
 ```
 
-## 尚未由本证据关闭的范围
+## 后续范围状态
 
-本证据不关闭 G5 整体 Gate。死信人工备注/再次派发、真实对象存储 Payload、故障注入和完整 G5 验收器仍分别由 G5-08、G5-12、G5-13 处理。Flyway 11.7.2 对 PostgreSQL 18.4 的支持上限告警仍作为既有兼容风险保留。
+本证据只负责 G5-09～G5-11。死信人工备注/再次派发已由 G5-08 闭环；真实对象存储 Payload、故障注入和完整 G5 验收器已于 2026-08-04 由 [`G5-12-G5-13-verification.md`](G5-12-G5-13-verification.md) 闭环。Flyway 11.7.2 对 PostgreSQL 18.4 的支持上限告警仍作为既有兼容风险保留。

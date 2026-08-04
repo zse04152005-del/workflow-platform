@@ -1,6 +1,6 @@
 {
   "component": "runtime-reliability-kernel",
-  "version": 2,
+  "version": 3,
   "gate": "G5",
   "verifiedTasks": [
     "G5-01",
@@ -10,10 +10,15 @@
     "G5-05",
     "G5-06",
     "G5-07",
-    "G5-08"
+    "G5-08",
+    "G5-09",
+    "G5-10",
+    "G5-11",
+    "G5-12",
+    "G5-13"
   ],
-  "completedDependencies": ["G5-09", "G5-10", "G5-11"],
-  "deferredTasks": ["G5-12", "G5-13"],
+  "completedDependencies": [],
+  "deferredTasks": [],
   "adr": "docs/adr/ADR-004-retry-lease-recovery-dead-letter-replay.md",
   "delivery": "at-least-once",
   "counterLifecycle": {
@@ -32,6 +37,21 @@
   "recovery": ["expired-lease-scan", "attempt-abandoned", "lease-expired", "redispatch-new-generation", "late-result-rejected"],
   "deduplication": ["consumer-name-event-id", "same-transaction-as-domain-result"],
   "deadLetter": ["redacted-summary", "redacted-append-only-note", "24-hour-idempotency", "audit", "outbox-note-digest-only", "redispatch-new-instance", "source-history-immutable"],
+  "payload": {
+    "inlineThresholdProperty": "workflow.object-storage.inline-threshold-bytes",
+    "maximumInputBytes": 16777216,
+    "namespace": "s3://<bucket>/payload/v1/<tenant-id>/<sha256>",
+    "integrity": "sha256-metadata-and-content",
+    "authorization": "tenant-prefix-and-object-metadata",
+    "retentionClasses": ["transient-7d", "runtime-30d", "audit-365d"],
+    "lifecycle": ["hot", "archived", "delete-after-retain-until"]
+  },
+  "faultInjection": [
+    "outbox-before-mark-crash",
+    "kafka-duplicate",
+    "real-network-timeout",
+    "postgresql-short-outage"
+  ],
   "evidence": {
     "postgresql": [
       "JdbcRuntimeTransitionStoreIT",
@@ -39,6 +59,13 @@
       "JdbcWorkerTaskStoreIT",
       "JdbcRuntimeControlStoreIT"
     ],
-    "postgresqlKafka": ["RuntimeHappyPathE2EIT"]
+    "postgresqlKafkaMinio": ["RuntimeHappyPathE2EIT"],
+    "minio": ["MinioTenantPayloadStoreIT"],
+    "faults": [
+      "JdbcOutboxPublicationStoreIT",
+      "KafkaTaskDeliveryIT",
+      "ManagedHttpWorkerNodeExecutorTests",
+      "JdbcWorkerTaskStoreIT"
+    ]
   }
 }

@@ -414,7 +414,7 @@ public final class ManagedHttpWorkerNodeExecutor implements WorkerNodeExecutor {
         }
     }
 
-    private static final class JdkHttpExchange implements HttpExchange {
+    static final class JdkHttpExchange implements HttpExchange {
         private final HttpClient client =
                 HttpClient.newBuilder()
                         .followRedirects(HttpClient.Redirect.NEVER)

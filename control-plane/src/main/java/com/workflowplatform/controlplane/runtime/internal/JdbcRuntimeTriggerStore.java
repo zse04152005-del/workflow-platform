@@ -61,13 +61,12 @@ final class JdbcRuntimeTriggerStore implements RuntimeTriggerStore {
                             PublishedVersion version = publishedVersion(command);
                             UUID instanceId = TimeOrderedUuidV7.generate();
                             Instant acceptedAt = JdbcRuntimeSupport.transactionTimestamp(jdbc);
-                            String inputDigest = digest(command.input().toString());
-                            insertInstance(command, version, instanceId, inputDigest);
+                            insertInstance(command, version, instanceId);
                             insertNodes(command, version, instanceId);
                             UUID eventId = TimeOrderedUuidV7.generate();
                             insertAudit(command, version, instanceId, eventId, acceptedAt);
                             insertOutbox(command, version, instanceId, eventId, acceptedAt);
-                            complete(command, instanceId, inputDigest);
+                            complete(command, instanceId, command.inputDigest());
                             return new RuntimeTriggerResult(
                                     instanceId,
                                     version.id(),
@@ -202,16 +201,13 @@ final class JdbcRuntimeTriggerStore implements RuntimeTriggerStore {
     }
 
     private void insertInstance(
-            RuntimeTriggerCommand command,
-            PublishedVersion version,
-            UUID instanceId,
-            String inputDigest) {
+            RuntimeTriggerCommand command, PublishedVersion version, UUID instanceId) {
         int inserted =
                 jdbc.update(
                         "INSERT INTO public.workflow_instance (id, tenant_id, created_by, updated_by, "
                                 + "definition_id, workflow_version_id, business_key, status, input_ref, "
                                 + "input_digest, input_payload, trace_id) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?, 'CREATED', NULL, ?, CAST(? AS jsonb), ?)",
+                                + "VALUES (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, CAST(? AS jsonb), ?)",
                         instanceId,
                         command.context().tenantId(),
                         command.context().actorId(),
@@ -219,8 +215,9 @@ final class JdbcRuntimeTriggerStore implements RuntimeTriggerStore {
                         version.definitionId(),
                         version.id(),
                         command.businessKey(),
-                        inputDigest,
-                        json(command.input()),
+                        command.inputReference(),
+                        command.inputDigest(),
+                        command.inputReference() == null ? json(command.input()) : null,
                         command.traceId());
         requireOne(inserted, "workflow instance insert");
     }

@@ -18,6 +18,8 @@ import com.workflowplatform.controlplane.runtime.RuntimeSchedulingStore;
 import com.workflowplatform.controlplane.runtime.RuntimeStateTransitionService;
 import com.workflowplatform.controlplane.runtime.RuntimeTriggerService;
 import com.workflowplatform.controlplane.security.WorkflowRequestContext;
+import com.workflowplatform.payload.PayloadDigests;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -104,6 +106,9 @@ class JdbcRuntimeSchedulingStoreIT {
             UUID.fromString("0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c51e");
     private static final String TRACE_ID = "abcdef1234567890abcdef1234567890";
     private static final String DIGEST = "1".repeat(64);
+    private static final String EMPTY_INPUT = "{}";
+    private static final String EMPTY_INPUT_DIGEST =
+            PayloadDigests.sha256(EMPTY_INPUT.getBytes(StandardCharsets.UTF_8));
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -623,23 +628,25 @@ class JdbcRuntimeSchedulingStoreIT {
     private static void insertPausedInstance() {
         admin.update(
                 "INSERT INTO public.workflow_instance (id, tenant_id, created_by, updated_by, "
-                        + "definition_id, workflow_version_id, status, input_digest, started_at, "
+                        + "definition_id, workflow_version_id, status, input_payload, input_digest, started_at, "
                         + "trace_id) VALUES (?, ?, 'g5-scheduler', 'g5-scheduler', ?, ?, "
-                        + "'PAUSED', ?, transaction_timestamp(), ?)",
+                        + "'PAUSED', CAST(? AS jsonb), ?, transaction_timestamp(), ?)",
                 PAUSED_INSTANCE_ID,
                 TENANT_ONE,
                 DEFINITION_ID,
                 VERSION_ID,
-                DIGEST,
+                EMPTY_INPUT,
+                EMPTY_INPUT_DIGEST,
                 TRACE_ID);
     }
 
     private static void insertInstance(UUID id) {
         admin.update(
                 "INSERT INTO public.workflow_instance (id, tenant_id, created_by, updated_by, "
-                        + "definition_id, workflow_version_id, status, input_digest, started_at, trace_id) "
+                        + "definition_id, workflow_version_id, status, input_payload, input_digest, "
+                        + "started_at, trace_id) "
                         + "VALUES (?, ?, 'g4-scheduler', 'g4-scheduler', ?, ?, "
-                        + "CASE WHEN ? = ? THEN 'CREATED' ELSE 'RUNNING' END, ?, "
+                        + "CASE WHEN ? = ? THEN 'CREATED' ELSE 'RUNNING' END, CAST(? AS jsonb), ?, "
                         + "CASE WHEN ? = ? THEN NULL ELSE transaction_timestamp() END, ?)",
                 id,
                 TENANT_ONE,
@@ -647,7 +654,8 @@ class JdbcRuntimeSchedulingStoreIT {
                 VERSION_ID,
                 id,
                 INSTANCE_ID,
-                DIGEST,
+                EMPTY_INPUT,
+                EMPTY_INPUT_DIGEST,
                 id,
                 INSTANCE_ID,
                 TRACE_ID);

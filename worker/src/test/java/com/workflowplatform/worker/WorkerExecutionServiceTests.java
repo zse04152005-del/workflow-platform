@@ -12,7 +12,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflowplatform.payload.PayloadDigests;
+import com.workflowplatform.payload.TenantPayloadStore;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,6 +61,61 @@ class WorkerExecutionServiceTests {
 
         assertEquals(WorkerExecutionService.ProcessResult.PROCESSED, result);
         verify(store).complete(task, WORKER_ID, success);
+    }
+
+    @Test
+    void externalizesOversizedInlinePluginOutputWithTheVerifiedDigest() {
+        WorkerTaskStore store = mock(WorkerTaskStore.class);
+        WorkerNodeExecutor executor = mock(WorkerNodeExecutor.class);
+        TenantPayloadStore payloadStore = mock(TenantPayloadStore.class);
+        WorkerTaskStore.ClaimedTask task = task("custom");
+        byte[] output = "{\"result\":\"externalized\"}".getBytes(StandardCharsets.UTF_8);
+        String digest = PayloadDigests.sha256(output);
+        WorkerTaskStore.NodeExecutionResult inline =
+                WorkerTaskStore.NodeExecutionResult.success(
+                        "inline:" + Base64.getUrlEncoder().withoutPadding().encodeToString(output),
+                        digest);
+        TenantPayloadStore.StoredPayload stored =
+                new TenantPayloadStore.StoredPayload(
+                        "s3://workflow-payloads/payload/v1/"
+                                + task.event().tenantId()
+                                + "/"
+                                + digest,
+                        digest,
+                        output.length,
+                        "runtime-30d",
+                        Instant.now().plusSeconds(60),
+                        Instant.now().plusSeconds(120));
+        when(store.claim(any(), eq(CONSUMER_NAME), eq(WORKER_ID)))
+                .thenReturn(WorkerTaskStore.ClaimResult.claimed(task));
+        when(executor.supports("custom")).thenReturn(true);
+        when(executor.execute(task)).thenReturn(inline);
+        when(payloadStore.put(
+                        eq(task.event().tenantId()),
+                        eq(output),
+                        eq("application/json"),
+                        eq("runtime-30d"),
+                        any(Instant.class)))
+                .thenReturn(stored);
+
+        WorkerExecutionService service =
+                new WorkerExecutionService(
+                        store,
+                        new ObjectMapper(),
+                        List.of(executor),
+                        List.of(),
+                        payloadStore,
+                        4,
+                        CONSUMER_NAME,
+                        WORKER_ID);
+        service.process(payload());
+
+        verify(store)
+                .complete(
+                        task,
+                        WORKER_ID,
+                        WorkerTaskStore.NodeExecutionResult.success(
+                                stored.reference(), stored.digest()));
     }
 
     @Test

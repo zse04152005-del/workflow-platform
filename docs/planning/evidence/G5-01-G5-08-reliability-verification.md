@@ -4,7 +4,7 @@
 
 截至 2026-08-04，G5-01～G5-08 已完成实现、真实 PostgreSQL 集成验证、真实 PostgreSQL/Kafka 崩溃恢复 E2E 和机器防漏门禁。系统在至少一次投递下以 PostgreSQL 状态、当前租约 fencing token 和事务 `processed_event` 为权威；重复事件、过期 Worker 结果和已处置死信不会改写既有事实。
 
-本证据仅闭环 G5-01～G5-08。G5-09～G5-11 已有独立证据；G5-12、G5-13 仍明确延期，未被提前标记。
+本证据仅闭环 G5-01～G5-08。G5-09～G5-11 已有独立证据；G5-12、G5-13 当时未被提前标记，现已由 [`G5-12-G5-13-verification.md`](G5-12-G5-13-verification.md) 独立闭环。
 
 ## 2. 任务与可执行证据
 
@@ -45,7 +45,7 @@
 
 ```text
 pnpm run runtime:g5:verify
-PASS：G5-01～G5-08 源码、数据库、API、测试与 ADR 绑定；G5-12/G5-13 显式延期。
+PASS：G5-01～G5-08 源码、数据库、API、测试与 ADR 绑定；本证据不把后续 G5-12/G5-13 的完成倒算到原验收范围。
 
 pnpm run runtime:g5:test
 PASS：正向契约 + 10/10 负向变异。
@@ -83,7 +83,7 @@ RuntimeHappyPathE2EIT            2/2
 
 `scripts/runtime/verify-reliability-kernel.mjs` 不再只检查类是否存在，而是绑定：
 
-- G5-01～G5-08 精确任务范围及 G5-12/G5-13 延期状态；
+- G5-01～G5-08 精确任务范围及当时 G5-12/G5-13 尚未闭环的状态；
 - 迁移约束、三个计数增长点与 worker/lease/expiry fencing 条件；
 - 三种退避、稳定 jitter、次数/窗口、Retry-After、外部结果查询；
 - 到期扫描、ABANDONED/EXPIRED、事务 processed_event；

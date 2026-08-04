@@ -9,11 +9,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
@@ -251,6 +258,48 @@ class ManagedHttpWorkerNodeExecutorTests {
         assertEquals("HTTP_INTERRUPTED", interrupted.errorCode());
         assertTrue(interrupted.retryable());
         assertTrue(Thread.interrupted());
+    }
+
+    @Test
+    void realTlsPeerStallTimesOutWithoutProducingASuccess() throws Exception {
+        CountDownLatch accepted = new CountDownLatch(1);
+        try (ServerSocket server =
+                        new ServerSocket(
+                                8443, 1, InetAddress.getByAddress(new byte[] {127, 0, 0, 1}));
+                ExecutorService peer = Executors.newSingleThreadExecutor()) {
+            peer.submit(
+                    () -> {
+                        try (Socket socket = server.accept()) {
+                            socket.setSoTimeout(1000);
+                            accepted.countDown();
+                            Thread.sleep(Duration.ofSeconds(5));
+                        } catch (InterruptedException exception) {
+                            Thread.currentThread().interrupt();
+                        } catch (IOException exception) {
+                            throw new IllegalStateException("test TLS peer failed", exception);
+                        }
+                    });
+            ManagedHttpWorkerNodeExecutor executor =
+                    new ManagedHttpWorkerNodeExecutor(
+                            new ObjectMapper(),
+                            Set.of(server.getInetAddress().getHostAddress()),
+                            1024,
+                            ignored -> List.of(InetAddress.getByAddress(new byte[] {8, 8, 8, 8})),
+                            new ManagedHttpWorkerNodeExecutor.JdkHttpExchange());
+
+            WorkerTaskStore.NodeExecutionResult result =
+                    executor.execute(
+                            task(
+                                    "{\"_managedEndpoint\":\"https://"
+                                            + server.getInetAddress().getHostAddress()
+                                            + ":8443\","
+                                            + "\"_timeout\":\"PT0.2S\",\"method\":\"GET\"}"));
+
+            assertTrue(accepted.await(2, TimeUnit.SECONDS));
+            assertEquals("HTTP_TRANSPORT_ERROR", result.errorCode());
+            assertTrue(result.retryable());
+            peer.shutdownNow();
+        }
     }
 
     private static ManagedHttpWorkerNodeExecutor executor(

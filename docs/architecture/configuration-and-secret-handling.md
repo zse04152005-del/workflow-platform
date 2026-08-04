@@ -59,6 +59,7 @@ control-plane 和 worker 都提供：
 | `WORKFLOW_S3_ACCESS_KEY` | 两个后端 | 条件敏感 | 本地 MinIO 用户名 | 生产视为敏感身份 |
 | `WORKFLOW_S3_SECRET_KEY` | 两个后端 | 是 | 本地专用占位值 | Secret Provider/环境注入，无默认 |
 | `WORKFLOW_S3_BUCKET` | 两个后端 | 否 | `workflow-payloads` | 必须注入 |
+| `WORKFLOW_PAYLOAD_INLINE_THRESHOLD_BYTES` | 两个后端 | 否 | `65536` | 生产必须为 Control Plane 与 Worker 注入相同的 1～67108864 字节阈值 |
 | `WORKFLOW_OIDC_ISSUER` | control-plane | 否 | 本地 Keycloak Realm | 必须注入 HTTPS Issuer |
 | `WORKFLOW_OTEL_ENDPOINT` | 两个后端 | 否 | `http://127.0.0.1:4317` | 必须注入；鉴权另用敏感变量 |
 | `WORKFLOW_WORKER_CONCURRENCY` | worker | 否 | `4` | 必须按容量注入 |

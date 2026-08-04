@@ -6,10 +6,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflowplatform.controlplane.LengthPrefixedSha256;
 import com.workflowplatform.controlplane.definition.TimeOrderedUuidV7;
 import com.workflowplatform.controlplane.security.WorkflowRequestContext;
+import com.workflowplatform.payload.PayloadDigests;
+import com.workflowplatform.payload.TenantPayloadStore;
+import com.workflowplatform.payload.UnavailableTenantPayloadStore;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Validates trigger boundaries and delegates to the transactional runtime store. */
@@ -20,14 +26,51 @@ public final class RuntimeTriggerService {
     private static final Pattern BUSINESS_KEY = Pattern.compile("[\\p{L}\\p{N}._:/-]{1,200}");
     private static final String TRIGGER_TYPE_MANUAL = "manual";
     private static final String TRIGGER_TYPE_HTTP = "http";
-    private static final int MAXIMUM_INPUT_BYTES = 1_048_576;
+    private static final int DEFAULT_INLINE_THRESHOLD_BYTES = 65_536;
+    private static final int MAXIMUM_INPUT_BYTES = 16 * 1024 * 1024;
+    private static final String RUNTIME_RETENTION_CLASS = "runtime-30d";
 
     private final RuntimeTriggerStore store;
     private final ObjectMapper objectMapper;
+    private final PayloadPolicy payloadPolicy;
+    private final TenantPayloadStore payloadStore;
+    private final Clock clock;
 
     public RuntimeTriggerService(RuntimeTriggerStore triggerStore, ObjectMapper jsonMapper) {
+        this(
+                triggerStore,
+                jsonMapper,
+                new PayloadPolicy(DEFAULT_INLINE_THRESHOLD_BYTES),
+                new UnavailableTenantPayloadStore(),
+                Clock.systemUTC());
+    }
+
+    @Autowired
+    RuntimeTriggerService(
+            RuntimeTriggerStore triggerStore,
+            ObjectMapper jsonMapper,
+            TenantPayloadStore tenantPayloadStore,
+            @Value("${workflow.object-storage.inline-threshold-bytes:65536}")
+                    int inlineThresholdBytes) {
+        this(
+                triggerStore,
+                jsonMapper,
+                new PayloadPolicy(inlineThresholdBytes),
+                tenantPayloadStore,
+                Clock.systemUTC());
+    }
+
+    public RuntimeTriggerService(
+            RuntimeTriggerStore triggerStore,
+            ObjectMapper jsonMapper,
+            PayloadPolicy configuredPayloadPolicy,
+            TenantPayloadStore tenantPayloadStore,
+            Clock configuredClock) {
         store = Objects.requireNonNull(triggerStore, "triggerStore");
         objectMapper = Objects.requireNonNull(jsonMapper, "jsonMapper");
+        payloadPolicy = Objects.requireNonNull(configuredPayloadPolicy, "configuredPayloadPolicy");
+        payloadStore = Objects.requireNonNull(tenantPayloadStore, "tenantPayloadStore");
+        clock = Objects.requireNonNull(configuredClock, "configuredClock");
     }
 
     public RuntimeTriggerResult trigger(
@@ -49,14 +92,17 @@ public final class RuntimeTriggerService {
             throw new IllegalArgumentException("traceId must be a non-zero 32 character hex value");
         }
         WorkflowDraftIdempotency idempotency = idempotency(idempotencyKey);
+        String canonicalInput = canonicalJson(input);
+        byte[] inputBytes = canonicalInput.getBytes(StandardCharsets.UTF_8);
         String requestDigest =
                 digest(
                         "runtime-trigger-v1",
                         workflowId.toString(),
                         triggerType,
                         nullable(businessKey),
-                        canonicalJson(input),
+                        canonicalInput,
                         effectiveTraceId);
+        PayloadPlacement placement = placePayload(context, inputBytes);
         return store.trigger(
                 new RuntimeTriggerStore.RuntimeTriggerCommand(
                         context,
@@ -68,7 +114,9 @@ public final class RuntimeTriggerService {
                         TimeOrderedUuidV7.generate(),
                         "runtime:trigger:" + workflowId,
                         idempotency.keyDigest(),
-                        requestDigest));
+                        requestDigest,
+                        placement.reference(),
+                        placement.digest()));
     }
 
     public RuntimeTriggerResult manual(
@@ -116,8 +164,26 @@ public final class RuntimeTriggerService {
             throw new IllegalArgumentException("trigger input must be a JSON object");
         }
         if (input.toString().getBytes(StandardCharsets.UTF_8).length > MAXIMUM_INPUT_BYTES) {
-            throw new IllegalArgumentException("trigger input exceeds 1 MiB");
+            throw new IllegalArgumentException("trigger input exceeds 16 MiB");
         }
+    }
+
+    private PayloadPlacement placePayload(WorkflowRequestContext context, byte[] inputBytes) {
+        String digest = PayloadDigests.sha256(inputBytes);
+        if (payloadPolicy.shouldInline(inputBytes)) {
+            return new PayloadPlacement(null, digest);
+        }
+        TenantPayloadStore.StoredPayload stored =
+                payloadStore.put(
+                        context.tenantId(),
+                        inputBytes,
+                        "application/json",
+                        RUNTIME_RETENTION_CLASS,
+                        clock.instant());
+        if (!digest.equals(stored.digest()) || stored.sizeBytes() != inputBytes.length) {
+            throw new IllegalStateException("object payload store returned inconsistent metadata");
+        }
+        return new PayloadPlacement(stored.reference(), stored.digest());
     }
 
     private static void requireBusinessKey(String businessKey) {
@@ -156,4 +222,6 @@ public final class RuntimeTriggerService {
     }
 
     private record WorkflowDraftIdempotency(String keyDigest) {}
+
+    private record PayloadPlacement(String reference, String digest) {}
 }

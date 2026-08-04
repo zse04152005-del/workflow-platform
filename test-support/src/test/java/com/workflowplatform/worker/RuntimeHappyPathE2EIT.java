@@ -16,7 +16,10 @@ import com.workflowplatform.controlplane.runtime.RuntimeTriggerResult;
 import com.workflowplatform.controlplane.runtime.RuntimeTriggerService;
 import com.workflowplatform.controlplane.runtime.internal.KafkaOutboxEventSink;
 import com.workflowplatform.controlplane.security.WorkflowRequestContext;
+import com.workflowplatform.payload.TenantPayloadStore;
 import com.workflowplatform.worker.internal.KafkaTaskReadyConsumer;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -41,6 +44,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.flywaydb.core.Flyway;
@@ -61,7 +65,9 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.listener.MessageListener;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -69,13 +75,20 @@ import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
 @Execution(ExecutionMode.SAME_THREAD)
-@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.UnitTestAssertionsShouldIncludeMessage"})
+@SuppressWarnings({
+    "PMD.AvoidDuplicateLiterals",
+    "PMD.CloseResource", // MinioClient has no close lifecycle; its HTTP pool is SDK-managed.
+    "PMD.UnitTestAssertionsShouldIncludeMessage"
+})
 class RuntimeHappyPathE2EIT {
 
     private static final String POSTGRES_IMAGE =
             "postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296";
     private static final String KAFKA_IMAGE =
             "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837";
+    private static final String MINIO_IMAGE =
+            "minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:"
+                    + "14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
     private static final String DATABASE = "workflow_g4_e2e";
     private static final String ADMIN_USER = "workflow_e2e_admin";
     private static final String MIGRATION_USER = "workflow_e2e_migration";
@@ -84,6 +97,9 @@ class RuntimeHappyPathE2EIT {
     private static final String TASK_TOPIC = "workflow.task.ready.e2e";
     private static final String EVENTS_TOPIC = "workflow.events.e2e";
     private static final String CONSUMER_GROUP = "workflow-worker-e2e";
+    private static final String MINIO_ACCESS_KEY = "workflow_g5_e2e";
+    private static final String MINIO_SECRET_KEY = UUID.randomUUID().toString();
+    private static final String PAYLOAD_BUCKET = "workflow-g5-e2e-payloads";
     private static final String TRACE_ID = "abcdef1234567890abcdef1234567890";
     private static final String DIGEST = "7".repeat(64);
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -151,6 +167,18 @@ class RuntimeHappyPathE2EIT {
                     .withStartupTimeout(Duration.ofSeconds(120))
                     .withReuse(false);
 
+    @Container
+    private static final GenericContainer<?> MINIO =
+            new GenericContainer<>(DockerImageName.parse(MINIO_IMAGE))
+                    .withEnv("MINIO_ROOT_USER", MINIO_ACCESS_KEY)
+                    .withEnv("MINIO_ROOT_PASSWORD", MINIO_SECRET_KEY)
+                    .withCommand("server", "/data")
+                    .withExposedPorts(9000)
+                    .withLabel("com.workflowplatform.test-suite", "G5-12-G5-13")
+                    .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000))
+                    .withStartupTimeout(Duration.ofSeconds(120))
+                    .withReuse(false);
+
     private static JdbcTemplate admin;
 
     @BeforeAll
@@ -161,6 +189,12 @@ class RuntimeHappyPathE2EIT {
                         new DriverManagerDataSource(
                                 POSTGRES.getJdbcUrl(), ADMIN_USER, ADMIN_CREDENTIAL));
         seedWorkflow();
+        MinioClient minio =
+                MinioClient.builder()
+                        .endpoint(minioEndpoint())
+                        .credentials(MINIO_ACCESS_KEY, MINIO_SECRET_KEY)
+                        .build();
+        minio.makeBucket(MakeBucketArgs.builder().bucket(PAYLOAD_BUCKET).build());
         try (Admin kafkaAdmin = Admin.create(adminProperties())) {
             kafkaAdmin
                     .createTopics(
@@ -186,8 +220,40 @@ class RuntimeHappyPathE2EIT {
                     instanceId = first.instanceId();
                     assertEquals(instanceId, replay.instanceId());
                     assertTrue(replay.replayed());
+                    assertEquals(
+                            1,
+                            count(
+                                    "SELECT count(*) FROM public.workflow_instance WHERE id = ? "
+                                            + "AND input_payload IS NULL AND input_ref LIKE 's3://%'",
+                                    instanceId));
 
                     executeNext(control, instanceId, "start", "SUCCEEDED");
+                    UUID startNode = nodeInstanceId(instanceId, "start");
+                    String duplicateTaskEvent =
+                            admin.queryForObject(
+                                    "SELECT payload::text FROM public.outbox_event "
+                                            + "WHERE aggregate_id = ? AND event_type = 'workflow.task.ready' "
+                                            + "ORDER BY occurred_at DESC LIMIT 1",
+                                    String.class,
+                                    startNode);
+                    long offsetBeforeDuplicate = committedTaskOffset();
+                    control.kafka()
+                            .send(TASK_TOPIC, TENANT_ID.toString(), duplicateTaskEvent)
+                            .get(20, TimeUnit.SECONDS);
+                    awaitCommittedTaskOffset(offsetBeforeDuplicate + 1);
+                    assertEquals(
+                            1,
+                            count(
+                                    "SELECT count(*) FROM public.task_execution "
+                                            + "WHERE node_instance_id = ?",
+                                    startNode));
+                    assertEquals(
+                            1,
+                            count(
+                                    "SELECT count(*) FROM public.processed_event "
+                                            + "WHERE tenant_id = ? AND consumer_name = ?",
+                                    TENANT_ID,
+                                    CONSUMER_GROUP));
                     executeNext(control, instanceId, "condition", "SUCCEEDED");
                     assertEquals("CANCELLED", nodeStatus(instanceId, "fallback-end"));
                     executeNext(control, instanceId, "managed-http", "SUCCEEDED");
@@ -439,6 +505,7 @@ class RuntimeHappyPathE2EIT {
                 context.getBean(WorkerTaskStore.class),
                 mapper,
                 List.of(new BuiltinWorkerNodeExecutor(mapper), managedHttp),
+                context.getBean(TenantPayloadStore.class),
                 CONSUMER_GROUP,
                 "worker-e2e");
     }
@@ -446,6 +513,9 @@ class RuntimeHappyPathE2EIT {
     private static AnnotationConfigApplicationContext workerStoreContext() {
         DriverManagerDataSource dataSource = applicationDataSource();
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+        context.getEnvironment()
+                .getPropertySources()
+                .addFirst(new MapPropertySource("g5-payload-worker", payloadProperties()));
         context.registerBean(DataSource.class, () -> dataSource);
         context.registerBean(JdbcTemplate.class, () -> new JdbcTemplate(dataSource));
         context.registerBean(
@@ -471,9 +541,20 @@ class RuntimeHappyPathE2EIT {
                                         "workflow.kafka.task-ready-topic",
                                         TASK_TOPIC,
                                         "workflow.kafka.events-topic",
-                                        EVENTS_TOPIC)));
+                                        EVENTS_TOPIC,
+                                        "workflow.object-storage.inline-threshold-bytes",
+                                        "16",
+                                        "workflow.object-storage.endpoint",
+                                        minioEndpoint(),
+                                        "workflow.object-storage.access-key",
+                                        MINIO_ACCESS_KEY,
+                                        "workflow.object-storage.secret-key",
+                                        MINIO_SECRET_KEY,
+                                        "workflow.object-storage.bucket",
+                                        PAYLOAD_BUCKET)));
         DefaultKafkaProducerFactory<String, String> producers =
                 new DefaultKafkaProducerFactory<>(producerProperties());
+        KafkaTemplate<String, String> kafka = new KafkaTemplate<>(producers);
         context.registerBean(DataSource.class, () -> dataSource);
         context.registerBean(JdbcTemplate.class, () -> new JdbcTemplate(dataSource));
         context.registerBean(
@@ -483,13 +564,14 @@ class RuntimeHappyPathE2EIT {
         context.registerBean(
                 "kafkaTemplate",
                 KafkaTemplate.class,
-                () -> new KafkaTemplate<String, String>(producers),
+                () -> kafka,
                 bean -> bean.setDestroyMethodName("destroy"));
         context.scan("com.workflowplatform.controlplane.runtime");
         context.refresh();
         return new ControlRuntime(
                 context,
                 producers,
+                kafka,
                 context.getBean(RuntimeTriggerService.class),
                 context.getBean(RuntimeSchedulingService.class),
                 context.getBean(LeaseRecoveryService.class),
@@ -572,6 +654,22 @@ class RuntimeHappyPathE2EIT {
                 POSTGRES.getJdbcUrl(), APPLICATION_USER, APPLICATION_CREDENTIAL);
     }
 
+    private static Map<String, Object> payloadProperties() {
+        return Map.of(
+                "workflow.object-storage.endpoint",
+                minioEndpoint(),
+                "workflow.object-storage.access-key",
+                MINIO_ACCESS_KEY,
+                "workflow.object-storage.secret-key",
+                MINIO_SECRET_KEY,
+                "workflow.object-storage.bucket",
+                PAYLOAD_BUCKET);
+    }
+
+    private static String minioEndpoint() {
+        return "http://" + MINIO.getHost() + ":" + MINIO.getMappedPort(9000);
+    }
+
     private static Map<String, Object> producerProperties() {
         return Map.of(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
@@ -604,6 +702,29 @@ class RuntimeHappyPathE2EIT {
 
     private static Map<String, Object> adminProperties() {
         return Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+    }
+
+    private static long committedTaskOffset() throws Exception {
+        try (Admin kafkaAdmin = Admin.create(adminProperties())) {
+            var offsets =
+                    kafkaAdmin
+                            .listConsumerGroupOffsets(CONSUMER_GROUP)
+                            .partitionsToOffsetAndMetadata()
+                            .get(10, TimeUnit.SECONDS);
+            var offset = offsets.get(new TopicPartition(TASK_TOPIC, 0));
+            return offset == null ? 0L : offset.offset();
+        }
+    }
+
+    private static void awaitCommittedTaskOffset(long expected) throws Exception {
+        Instant deadline = Instant.now().plusSeconds(20);
+        while (Instant.now().isBefore(deadline)) {
+            if (committedTaskOffset() >= expected) {
+                return;
+            }
+            Thread.sleep(50L);
+        }
+        assertTrue(committedTaskOffset() >= expected);
     }
 
     private static void provisionRolesAndMigrate() throws SQLException {
@@ -705,6 +826,7 @@ class RuntimeHappyPathE2EIT {
     private record ControlRuntime(
             AnnotationConfigApplicationContext context,
             DefaultKafkaProducerFactory<String, String> producers,
+            KafkaTemplate<String, String> kafka,
             RuntimeTriggerService triggers,
             RuntimeSchedulingService scheduler,
             LeaseRecoveryService recoveries,

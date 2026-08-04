@@ -12,6 +12,9 @@ import com.workflowplatform.controlplane.runtime.RuntimeTransitionActor;
 import com.workflowplatform.controlplane.runtime.RuntimeTransitionCommand;
 import com.workflowplatform.controlplane.runtime.RuntimeTransitionEffects;
 import com.workflowplatform.controlplane.security.WorkflowRequestContext;
+import com.workflowplatform.payload.TenantPayloadStore;
+import com.workflowplatform.payload.UnavailableTenantPayloadStore;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -22,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,6 +50,7 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
     private final TransactionTemplate transactions;
     private final RuntimeStateTransitionService transitions;
     private final ObjectMapper objectMapper;
+    private final TenantPayloadStore payloadStore;
     private final DagProgressor progressor = new DagProgressor();
     private final DeterministicConditionEvaluator conditionEvaluator =
             new DeterministicConditionEvaluator();
@@ -55,12 +60,28 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
             PlatformTransactionManager transactionManager,
             RuntimeStateTransitionService transitionService,
             ObjectMapper jsonMapper) {
+        this(
+                jdbcTemplate,
+                transactionManager,
+                transitionService,
+                jsonMapper,
+                new UnavailableTenantPayloadStore());
+    }
+
+    @Autowired
+    JdbcRuntimeSchedulingStore(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            RuntimeStateTransitionService transitionService,
+            ObjectMapper jsonMapper,
+            TenantPayloadStore tenantPayloadStore) {
         jdbc = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
         transactions =
                 new TransactionTemplate(
                         Objects.requireNonNull(transactionManager, "transactionManager"));
         transitions = Objects.requireNonNull(transitionService, "transitionService");
         objectMapper = Objects.requireNonNull(jsonMapper, "jsonMapper");
+        payloadStore = Objects.requireNonNull(tenantPayloadStore, "tenantPayloadStore");
     }
 
     @Override
@@ -135,7 +156,7 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
             nodes.add(new DagProgressor.Node(row.nodeId(), row.status()));
         }
         List<DagProgressor.Decision> decisions =
-                progressor.evaluate(nodes, parseEdges(instance.dsl(), instance.inputPayload()));
+                progressor.evaluate(nodes, parseEdges(instance.dsl(), inputPayload(instance)));
         boolean starts =
                 "CREATED".equals(instance.status())
                         && decisions.stream()
@@ -528,7 +549,8 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
     private InstanceRow lockInstance(WorkflowRequestContext context, UUID instanceId) {
         return jdbc
                 .query(
-                        "SELECT i.id, i.status, i.version, i.input_payload, v.dsl "
+                        "SELECT i.id, i.tenant_id, i.status, i.version, i.input_payload, "
+                                + "i.input_ref, i.input_digest, v.dsl "
                                 + "FROM public.workflow_instance i "
                                 + "JOIN public.workflow_version v ON v.tenant_id = i.tenant_id "
                                 + "AND v.id = i.workflow_version_id WHERE i.tenant_id = ? "
@@ -536,9 +558,12 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
                         (result, rowNumber) ->
                                 new InstanceRow(
                                         result.getObject("id", UUID.class),
+                                        result.getObject("tenant_id", UUID.class),
                                         result.getString(STATUS_COLUMN),
                                         result.getLong(VERSION_COLUMN),
                                         result.getString("input_payload"),
+                                        result.getString("input_ref"),
+                                        result.getString("input_digest"),
                                         result.getString("dsl")),
                         context.tenantId(),
                         instanceId)
@@ -591,6 +616,19 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
         } catch (RuntimeException | java.io.IOException exception) {
             throw new IllegalStateException("published workflow edges cannot be read", exception);
         }
+    }
+
+    private String inputPayload(InstanceRow instance) {
+        if (instance.inputPayload() != null) {
+            return instance.inputPayload();
+        }
+        if (instance.inputReference() == null) {
+            throw new IllegalStateException("workflow instance input snapshot is missing");
+        }
+        return new String(
+                payloadStore.read(
+                        instance.tenantId(), instance.inputReference(), instance.inputDigest()),
+                StandardCharsets.UTF_8);
     }
 
     private Map<String, String> selectConditionEdges(
@@ -659,7 +697,14 @@ final class JdbcRuntimeSchedulingStore implements RuntimeSchedulingStore {
     }
 
     private record InstanceRow(
-            UUID id, String status, long version, String inputPayload, String dsl) {}
+            UUID id,
+            UUID tenantId,
+            String status,
+            long version,
+            String inputPayload,
+            String inputReference,
+            String inputDigest,
+            String dsl) {}
 
     private record NodeAggregate(long total, long succeeded, long failed, long terminal) {}
 

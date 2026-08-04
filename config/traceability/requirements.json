@@ -581,21 +581,22 @@
       "scope": "mvp",
       "priority": "P1",
       "controlTasks": ["G2-06", "G5-12"],
-      "api": ["planned: 输入/输出查询返回内联值或受权对象引用与摘要 [G5-12]"],
-      "events": ["planned: 事件只携带受限 Payload 或对象引用/摘要，不携带大文件 [G5-12]"],
+      "api": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/RuntimeQueryService.java Runtime 查询返回数据库快照中的内联值或租户受权对象引用与 SHA-256 摘要 [G5-12]"],
+      "events": ["implemented: file:control-plane/src/main/java/com/workflowplatform/controlplane/runtime/internal/JdbcRuntimeSchedulingStore.java task.ready 只携带受限标识，Scheduler/Worker 从数据库快照解析内联 Payload 或对象引用/摘要，不在事件中携带大文件 [G5-12]"],
       "tables": [
         "implemented: file:control-plane/src/main/resources/db/migration/V3__create_runtime_and_schedule.sql 创建 workflow/task 输入输出 ref 与 64 位 SHA-256 digest 配对约束 [G2-06]",
-        "planned: G5-12 增加 payload size、对象存储授权、阈值与分层保留流程"
+        "implemented: file:payload-storage/src/main/java/com/workflowplatform/payload/MinioTenantPayloadStore.java 以租户路径、SHA-256/size 元数据、64 KiB 默认阈值和三类分层保留策略管理 MinIO 对象 [G5-12]"
       ],
       "tests": [
         "implemented: file:tests/database/g2-06-app-role-test.sql 验证空白引用、摘要格式和输出 ref/digest 配对 [G2-06]",
-        "planned: 阈值边界、摘要篡改、越权引用、对象缺失、归档与清理测试 [G5-12]"
+        "implemented: file:payload-storage/src/test/java/com/workflowplatform/payload/MinioTenantPayloadStoreIT.java 使用真实 MinIO 验证阈值引用、摘要篡改、跨租户、对象缺失、归档标签、保留期拒删和到期删除 [G5-12]",
+        "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 使用 PostgreSQL/Kafka/MinIO 验证大输入外置和 Scheduler/Worker 授权读取 [G5-12]"
       ],
       "docs": [
         "implemented: file:docs/architecture/runtime-and-schedule-migration.md 记录数据库仅保存受控引用/摘要且未实现对象存储能力 [G2-06]",
-        "planned: Payload 阈值、MinIO/S3 引用、保留/归档/删除与隐私策略 [G5-12]"
+        "implemented: file:docs/planning/evidence/G5-12-G5-13-verification.md 记录 Payload 阈值、MinIO/S3 租户引用、摘要/元数据校验、保留/归档/删除策略和可复验证据 [G5-12]"
       ],
-      "implementationStatus": "partial",
+      "implementationStatus": "implemented",
       "acceptanceGates": ["G5", "MVP-07"]
     },
     {
@@ -716,22 +717,26 @@
       ],
       "events": [
         "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 通过真实 Kafka 与 processed-event 验证重复不重复推进 [G4-17]",
-        "planned: 积压、Worker kill 和依赖故障注入 [G5-13,G10-05]"
+        "implemented: file:tests/integration/fault-injection-matrix.json 绑定真实 Kafka 重复、TLS 网络超时、PostgreSQL 短时故障和 Outbox 重领证据 [G5-13]",
+        "planned: Kafka 积压和更广泛的容量故障注入 [G10-05]"
       ],
       "tables": [
         "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 对 workflow/node/task/outbox/processed 状态作真实 PostgreSQL 断言 [G4-17]",
+        "implemented: file:worker/src/test/java/com/workflowplatform/worker/internal/JdbcWorkerTaskStoreIT.java 验证 PostgreSQL pause 期间 attempt/lease/audit/outbox/processed-event 无半提交且恢复后只成功一次 [G5-13]",
         "planned: dead-letter/human 全场景状态断言 [G10-04,G10-05]"
       ],
       "tests": [
         "implemented: file:test-support/src/test/java/com/workflowplatform/worker/RuntimeHappyPathE2EIT.java 跑通 HTTP→Condition→HTTP→Delay→控制面重建→End [G4-17]",
-        "planned: 订单/退款/告警和系统化故障注入 [G10-04,G10-05]"
+        "implemented: file:tests/integration/fault-injection-matrix.json 验证 Outbox/Kafka 重复、真实网络超时和 PostgreSQL 短时故障不变量 [G5-13]",
+        "planned: 订单/退款/告警三场景和 G10 扩展故障注入 [G10-04,G10-05]"
       ],
       "docs": [
         "implemented: file:docs/planning/evidence/G4-17-runtime-happy-path-e2e.md 记录真实基础设施、步骤、不变量和限制 [G4-17]",
-        "planned: G5/G10 三场景与故障证据 [G5-13,G10-04,G10-05]"
+        "implemented: file:docs/planning/evidence/G5-12-G5-13-verification.md 记录真实故障注入、事务不变量和组合基础设施证据 [G5-13]",
+        "planned: G10 三条演示流与扩展故障证据 [G10-04,G10-05]"
       ],
       "implementationStatus": "partial",
-      "acceptanceGates": ["G10", "MVP-01", "MVP-02", "MVP-03", "MVP-04"]
+      "acceptanceGates": ["G5", "G10", "MVP-01", "MVP-02", "MVP-03", "MVP-04"]
     },
     {
       "id": "REQ-SEC-TEST-001",

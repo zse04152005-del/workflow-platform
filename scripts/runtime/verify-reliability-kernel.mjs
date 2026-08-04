@@ -13,6 +13,9 @@ const defaults = {
   schedulingStore: file('control-plane', 'src', 'main', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcRuntimeSchedulingStore.java'),
   workerStore: file('worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'internal', 'JdbcWorkerTaskStore.java'),
   workerExecution: file('worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'WorkerExecutionService.java'),
+  triggerService: file('control-plane', 'src', 'main', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'RuntimeTriggerService.java'),
+  payloadStore: file('payload-storage', 'src', 'main', 'java', 'com', 'workflowplatform', 'payload', 'MinioTenantPayloadStore.java'),
+  retentionPolicy: file('payload-storage', 'src', 'main', 'java', 'com', 'workflowplatform', 'payload', 'PayloadRetentionPolicy.java'),
   retryPlanner: file('worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'internal', 'WorkerRetryPlanner.java'),
   externalHook: file('worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'ExternalResultQueryHook.java'),
   redactor: file('shared-contracts', 'src', 'main', 'java', 'com', 'workflowplatform', 'contracts', 'security', 'SensitiveTextRedactor.java'),
@@ -27,7 +30,12 @@ const defaults = {
   deadStoreTest: file('control-plane', 'src', 'test', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcRuntimeControlStoreIT.java'),
   deadControllerTest: file('control-plane', 'src', 'test', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'DeadLetterDispositionControllerTests.java'),
   redactorTest: file('shared-contracts', 'src', 'test', 'java', 'com', 'workflowplatform', 'contracts', 'security', 'SensitiveTextRedactorTests.java'),
+  outboxTest: file('control-plane', 'src', 'test', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcOutboxPublicationStoreIT.java'),
+  managedHttpTest: file('worker', 'src', 'test', 'java', 'com', 'workflowplatform', 'worker', 'ManagedHttpWorkerNodeExecutorTests.java'),
+  payloadTest: file('payload-storage', 'src', 'test', 'java', 'com', 'workflowplatform', 'payload', 'MinioTenantPayloadStoreIT.java'),
+  kafkaTest: file('test-support', 'src', 'test', 'java', 'com', 'workflowplatform', 'testsupport', 'KafkaTaskDeliveryIT.java'),
   e2eTest: file('test-support', 'src', 'test', 'java', 'com', 'workflowplatform', 'worker', 'RuntimeHappyPathE2EIT.java'),
+  faultMatrix: file('tests', 'integration', 'fault-injection-matrix.json'),
   packageJson: file('package.json'),
 };
 const argumentNames = new Map(
@@ -81,6 +89,9 @@ const transitionStore = text(input.transitionStore, 'runtime transition store');
 const schedulingStore = text(input.schedulingStore, 'lease recovery store');
 const workerStore = text(input.workerStore, 'Worker transaction store');
 const workerExecution = text(input.workerExecution, 'Worker execution service');
+const triggerService = text(input.triggerService, 'runtime trigger service');
+const payloadStore = text(input.payloadStore, 'MinIO tenant payload store');
+const retentionPolicy = text(input.retentionPolicy, 'payload retention policy');
 const retryPlanner = text(input.retryPlanner, 'Worker retry planner');
 const externalHook = text(input.externalHook, 'external result query hook');
 const redactor = text(input.redactor, 'sensitive text redactor');
@@ -95,13 +106,18 @@ const workerExecutionTest = text(input.workerExecutionTest, 'Worker execution te
 const deadStoreTest = text(input.deadStoreTest, 'dead-letter PostgreSQL test');
 const deadControllerTest = text(input.deadControllerTest, 'dead-letter controller test');
 const redactorTest = text(input.redactorTest, 'redactor test');
+const outboxTest = text(input.outboxTest, 'Outbox crash test');
+const managedHttpTest = text(input.managedHttpTest, 'real network timeout test');
+const payloadTest = text(input.payloadTest, 'MinIO payload integration test');
+const kafkaTest = text(input.kafkaTest, 'Kafka duplicate integration test');
 const e2eTest = text(input.e2eTest, 'PostgreSQL/Kafka recovery E2E test');
+const faultMatrix = JSON.parse(text(input.faultMatrix, 'fault injection matrix'));
 const packageJson = JSON.parse(text(input.packageJson, 'package.json'));
 
-exact([contract.component, contract.version, contract.gate], ['runtime-reliability-kernel', 2, 'G5'], 'G5 contract identity');
-exact(contract.verifiedTasks, Array.from({ length: 8 }, (_, index) => `G5-${String(index + 1).padStart(2, '0')}`), 'G5-01..G5-08 verified task set');
-exact(contract.completedDependencies, ['G5-09', 'G5-10', 'G5-11'], 'G5 completed dependency set');
-exact(contract.deferredTasks, ['G5-12', 'G5-13'], 'G5 deferred task set');
+exact([contract.component, contract.version, contract.gate], ['runtime-reliability-kernel', 3, 'G5'], 'G5 contract identity');
+exact(contract.verifiedTasks, Array.from({ length: 13 }, (_, index) => `G5-${String(index + 1).padStart(2, '0')}`), 'G5-01..G5-13 verified task set');
+exact(contract.completedDependencies, [], 'G5 completed dependency set');
+exact(contract.deferredTasks, [], 'G5 deferred task set');
 exact(contract.counterLifecycle, {
   dispatch_count: 'successful-dispatch',
   attempt_no: 'claim-enters-running',
@@ -111,6 +127,23 @@ exact(contract.retry?.strategies, ['fixed', 'linear', 'exponential'], 'G5-04 ret
 exact(contract.retry?.guards, ['maximum-attempts', 'maximum-window', 'retry-after'], 'G5-05 retry guards');
 exact(contract.fencing, ['worker-id', 'lease-generation', 'lease-not-expired'], 'G5-03 fencing tuple');
 exact(contract.delivery, 'at-least-once', 'G5-07 delivery mode');
+exact(contract.payload, {
+  inlineThresholdProperty: 'workflow.object-storage.inline-threshold-bytes',
+  maximumInputBytes: 16777216,
+  namespace: 's3://<bucket>/payload/v1/<tenant-id>/<sha256>',
+  integrity: 'sha256-metadata-and-content',
+  authorization: 'tenant-prefix-and-object-metadata',
+  retentionClasses: ['transient-7d', 'runtime-30d', 'audit-365d'],
+  lifecycle: ['hot', 'archived', 'delete-after-retain-until'],
+}, 'G5-12 payload contract');
+exact(contract.faultInjection, [
+  'outbox-before-mark-crash', 'kafka-duplicate', 'real-network-timeout', 'postgresql-short-outage',
+], 'G5-13 fault injection contract');
+for (const fault of contract.faultInjection) {
+  if (!faultMatrix.faults?.some((entry) => entry.id === fault && entry.evidence)) {
+    fail(`G5-13 fault matrix lacks bound evidence: ${fault}`);
+  }
+}
 
 tokens(adr, [
   '`dispatch_count`', '`attempt_no`', '`lease_generation`', '`fixed`、`linear` 或 `exponential`',
@@ -156,6 +189,26 @@ tokens(retryPlanner, [
 ], 'G5-04/G5-05 bounded retry planner');
 tokens(externalHook, ['boolean supports(String nodeType)', 'Optional<WorkerTaskStore.NodeExecutionResult> query('], 'G5-05 external result hook contract');
 tokens(workerExecution, ['List<ExternalResultQueryHook> resultQueryHooks', 'for (ExternalResultQueryHook hook : resultQueryHooks)', 'hook.query(task, executionResult)', 'isTerminalResolution(queried.get())'], 'G5-05 external result hook execution');
+tokens(triggerService, [
+  'workflow.object-storage.inline-threshold-bytes:65536', 'MAXIMUM_INPUT_BYTES = 16 * 1024 * 1024',
+  'payloadPolicy.shouldInline(inputBytes)', 'payloadStore.put(', 'RUNTIME_RETENTION_CLASS',
+  'placement.reference()', 'placement.digest()',
+], 'G5-12 trigger threshold and object placement');
+tokens(payloadStore, [
+  'PREFIX = "payload/v1/"', 'TENANT_METADATA = "tenant-id"', 'DIGEST_METADATA = "sha256"',
+  'PayloadDigests.sha256(payload)', 'payload reference does not belong to the requesting tenant',
+  '!identity.digest().equals(PayloadDigests.sha256(payload))', 'archivedAt.isBefore(metadata.archiveAt())',
+  'client.setObjectTags(', 'deletedAt.isBefore(metadata.retainUntil())', 'client.removeObject(',
+], 'G5-12 tenant, digest and lifecycle enforcement');
+tokens(retentionPolicy, [
+  'TRANSIENT_7D("transient-7d"', 'RUNTIME_30D("runtime-30d"', 'AUDIT_365D("audit-365d"',
+], 'G5-12 frozen retention classes');
+token(schedulingStore, 'payloadStore.read(', 'G5-12 scheduler authorized payload resolution');
+tokens(workerExecution, [
+  'payloadStore.read(', 'PAYLOAD_NOT_FOUND', 'PAYLOAD_STORAGE_UNAVAILABLE',
+  'PAYLOAD_ACCESS_DENIED', 'PAYLOAD_INTEGRITY_FAILED', 'externalizeOutput(',
+  'Base64.getUrlDecoder()', 'payloadStore.put(', '"runtime-30d"',
+], 'G5-12 Worker authorized payload resolution');
 
 tokens(schedulingStore, [
   'n.lease_expire_at <= ?', 'FOR UPDATE OF n SKIP LOCKED', 'WORKER_LEASE_EXPIRED',
@@ -195,6 +248,7 @@ tokens(workerStoreTest, [
 ], 'G5-03/G5-05/G5-07/G5-08 Worker PostgreSQL evidence');
 tokens(retryTest, ['plansFixedLinearAndExponentialDelays', 'appliesRetryAfterAndStopsAtAttemptOrElapsedWindow', 'terminalizesMissingPolicyAndRejectsMalformedPolicy'], 'G5-04/G5-05 retry tests');
 tokens(workerExecutionTest, ['externalResultQueryPreventsRetryWhenTheRemoteOperationAlreadySucceeded', 'failedOrNonTerminalExternalQueriesFallBackToTheOriginalRetryableFailure'], 'G5-05 external result tests');
+token(workerExecutionTest, 'externalizesOversizedInlinePluginOutputWithTheVerifiedDigest', 'G5-12 Worker output externalization test');
 tokens(deadStoreTest, ['@Testcontainers', 'appendsARedactedDeadLetterNoteIdempotentlyAndHidesCrossTenantRows', 'redispatchesAsAFailedNodeReplayWithoutRewritingSourceHistory'], 'G5-08 PostgreSQL dead-letter evidence');
 tokens(deadControllerTest, ['exposesAcceptedNoteAndRedispatchRoutes', 'requiresIdempotencyAndBoundedNonBlankBodies'], 'G5-08 MVC evidence');
 tokens(redactorTest, ['redactsCredentialShapesJwtAndControlsWithinTheBound', 'handlesBlankBoundsAndTruncationDeterministically'], 'G5-08 redaction tests');
@@ -206,10 +260,40 @@ tokens(e2eTest, [
   "attempt_no = 1 AND status = 'ABANDONED'",
   "lease_generation = 1 AND status = 'EXPIRED'", '"2:2:2",',
 ], 'G5-03/G5-06 real PostgreSQL/Kafka crash recovery evidence');
+tokens(payloadTest, [
+  '@Testcontainers', 'GenericContainer<?> MINIO',
+  'writesReadsAndRejectsCrossTenantDigestTamperingAndMissingObjects',
+  'enforcesArchiveAndDeleteBoundariesAgainstRealObjectTagsAndRemoval',
+  'PayloadStorageException.Reason.ACCESS_DENIED', 'PayloadStorageException.Reason.INTEGRITY',
+  'PayloadStorageException.Reason.NOT_FOUND', 'PayloadStorageException.Reason.RETENTION',
+], 'G5-12 real MinIO negative-boundary evidence');
+tokens(outboxTest, [
+  'eventIsResentAfterPublisherCrashesBeforeMarkingSuccess', "publisher_id = 'dead-publisher'",
+  'assertEquals(2, reclaimed.getFirst().publishAttempts())',
+], 'G5-13 Outbox duplicate evidence');
+tokens(kafkaTest, [
+  '@Testcontainers', 'KafkaContainer', 'publishesRoutesDeduplicatesAndRetainsFailedOffsets',
+  'duplicate:', 'awaitCommittedOffset(2L)',
+], 'G5-13 Kafka duplicate and offset evidence');
+tokens(managedHttpTest, [
+  'realTlsPeerStallTimesOutWithoutProducingASuccess', 'new ServerSocket(', '8443',
+  'new ManagedHttpWorkerNodeExecutor.JdkHttpExchange()', 'HTTP_TRANSPORT_ERROR',
+], 'G5-13 real network timeout evidence');
+tokens(workerStoreTest, [
+  'realDatabasePauseRollsBackWithoutHalfCommitAndRecoversExactlyOnce',
+  'pauseContainerCmd(POSTGRES.getContainerId()).exec()',
+  'unpauseContainerCmd(POSTGRES.getContainerId()).exec()',
+  "AND status = 'RUNNING'", "AND status = 'ACTIVE'", 'EVENT_OUTAGE_ID',
+], 'G5-13 real PostgreSQL short-outage invariants');
+tokens(e2eTest, [
+  'GenericContainer<?> MINIO', 'input_payload IS NULL AND input_ref LIKE \'s3://%\'',
+  'duplicateTaskEvent', 'awaitCommittedTaskOffset(offsetBeforeDuplicate + 1)',
+  'SELECT count(*) FROM public.task_execution',
+], 'G5-12/G5-13 PostgreSQL/Kafka/MinIO combined evidence');
 
 exact(packageJson.scripts?.['runtime:g5:verify'], 'node scripts/runtime/verify-reliability-kernel.mjs', 'G5 verify script');
 exact(packageJson.scripts?.['runtime:g5:test'], 'node scripts/runtime/test-reliability-kernel-verifier.mjs', 'G5 verifier-test script');
 token(packageJson.scripts?.verify ?? '', 'pnpm run runtime:g5:verify', 'root G5 verify binding');
 token(packageJson.scripts?.verify ?? '', 'pnpm run runtime:g5:test', 'root G5 verifier-test binding');
 
-console.log('G5-01..G5-08 reliability kernel PASS: ADR, independent counters, current fencing, bounded retry, lease recovery, transactional deduplication and governed redacted dead-letter redispatch are bound to PostgreSQL/Kafka evidence; G5-12/G5-13 remain explicitly deferred.');
+console.log('G5-01..G5-13 reliability kernel PASS: runtime fencing/retry/recovery/dead-letter controls, tenant-scoped SHA-256 MinIO payload lifecycle, and Outbox/Kafka/network/PostgreSQL fault invariants are bound to executable evidence.');

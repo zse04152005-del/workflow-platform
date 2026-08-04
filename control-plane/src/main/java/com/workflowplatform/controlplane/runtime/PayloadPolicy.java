@@ -1,8 +1,6 @@
 package com.workflowplatform.controlplane.runtime;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
+import com.workflowplatform.payload.PayloadDigests;
 import java.util.Objects;
 
 /** Inline/object-storage payload policy with digest verification and retention class. */
@@ -21,7 +19,7 @@ public final class PayloadPolicy {
     public PayloadReference reference(byte[] payload, String retentionClass) {
         Objects.requireNonNull(payload, "payload");
         Objects.requireNonNull(retentionClass, "retentionClass");
-        String digest = digest(payload);
+        String digest = PayloadDigests.sha256(payload);
         String reference =
                 payload.length <= inlineThresholdBytes
                         ? "inline:sha256:" + digest
@@ -30,17 +28,13 @@ public final class PayloadPolicy {
     }
 
     public void verify(byte[] payload, PayloadReference reference) {
-        if (!digest(payload).equals(reference.digest())) {
+        if (!PayloadDigests.sha256(payload).equals(reference.digest())) {
             throw new IllegalArgumentException("payload digest mismatch");
         }
     }
 
-    private static String digest(byte[] payload) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+    public boolean shouldInline(byte[] payload) {
+        return Objects.requireNonNull(payload, "payload").length <= inlineThresholdBytes;
     }
 
     public record PayloadReference(

@@ -20,6 +20,10 @@
       <groupId>com.workflowplatform</groupId>
       <artifactId>shared-contracts</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.workflowplatform</groupId>
+      <artifactId>payload-storage</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>com.workflowplatform</groupId>

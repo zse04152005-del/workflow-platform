@@ -15,6 +15,7 @@ workflow:
     access-key: ${WORKFLOW_S3_ACCESS_KEY}
     secret-key: ${WORKFLOW_S3_SECRET_KEY}
     bucket: ${WORKFLOW_S3_BUCKET}
+    inline-threshold-bytes: ${WORKFLOW_PAYLOAD_INLINE_THRESHOLD_BYTES}
   observability:
     otlp-endpoint: ${WORKFLOW_OTEL_ENDPOINT}
   worker:

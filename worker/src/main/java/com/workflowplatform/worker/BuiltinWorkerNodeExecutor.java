@@ -38,7 +38,10 @@ public final class BuiltinWorkerNodeExecutor implements WorkerNodeExecutor {
         return switch (task.nodeType()) {
             case "start", "end" ->
                     WorkerTaskStore.NodeExecutionResult.success(
-                            "instance-input:" + task.workflowInstanceId(), task.inputDigest());
+                            task.inputReference() == null
+                                    ? "instance-input:" + task.workflowInstanceId()
+                                    : task.inputReference(),
+                            task.inputDigest());
             case "condition" -> condition(task);
             case "delay" -> delay(task);
             default ->

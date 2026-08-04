@@ -1,9 +1,10 @@
 {
   "faults": [
     { "id": "worker-kill", "injection": "terminate worker after claim", "invariants": ["generation-increment", "late-result-reject", "history-immutable"] },
-    { "id": "outbox-before-mark-crash", "injection": "crash after broker send before sent mark", "invariants": ["duplicate-id", "consumer-dedup", "state-once"] },
-    { "id": "duplicate-consume", "injection": "deliver same event twice", "invariants": ["processed-event-once"] },
-    { "id": "database-short-outage", "injection": "fail JDBC for 5 seconds", "invariants": ["retryable-error", "no-partial-transition"] },
+    { "id": "outbox-before-mark-crash", "injection": "expire a real PostgreSQL publisher lease after broker send and reclaim the same event id", "invariants": ["same-event-id", "publish-attempt-increment", "consumer-dedup", "state-once"], "evidence": "JdbcOutboxPublicationStoreIT.eventIsResentAfterPublisherCrashesBeforeMarkingSuccess" },
+    { "id": "kafka-duplicate", "injection": "publish the same task envelope twice through real Kafka", "invariants": ["processed-event-once", "attempt-once", "offset-after-transaction"], "evidence": "RuntimeHappyPathE2EIT.httpConditionManagedHttpDelayRestartAndEndUseRealDatabaseAndKafka" },
+    { "id": "real-network-timeout", "injection": "accept a real TLS socket then stall beyond the request timeout", "invariants": ["retryable-transport-classification", "no-success-output"], "evidence": "ManagedHttpWorkerNodeExecutorTests.realTlsPeerStallTimesOutWithoutProducingASuccess" },
+    { "id": "postgresql-short-outage", "injection": "pause and unpause the real PostgreSQL container around Worker completion", "invariants": ["no-partial-transition", "attempt-running", "lease-active", "no-processed-event", "recovery-state-once"], "evidence": "JdbcWorkerTaskStoreIT.realDatabasePauseRollsBackWithoutHalfCommitAndRecoversExactlyOnce" },
     { "id": "kafka-backlog", "injection": "pause broker consumption", "invariants": ["queue-alert", "recovery-after-resume"] }
   ]
 }

@@ -11,12 +11,16 @@ const sources = {
   contract: path.join(root, 'config', 'runtime', 'reliability-kernel.json'),
   transitionStore: path.join(root, 'control-plane', 'src', 'main', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcRuntimeTransitionStore.java'),
   workerStore: path.join(root, 'worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'internal', 'JdbcWorkerTaskStore.java'),
+  payloadStore: path.join(root, 'payload-storage', 'src', 'main', 'java', 'com', 'workflowplatform', 'payload', 'MinioTenantPayloadStore.java'),
   retryPlanner: path.join(root, 'worker', 'src', 'main', 'java', 'com', 'workflowplatform', 'worker', 'internal', 'WorkerRetryPlanner.java'),
   schedulingStore: path.join(root, 'control-plane', 'src', 'main', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcRuntimeSchedulingStore.java'),
   redactor: path.join(root, 'shared-contracts', 'src', 'main', 'java', 'com', 'workflowplatform', 'contracts', 'security', 'SensitiveTextRedactor.java'),
   deadStore: path.join(root, 'control-plane', 'src', 'main', 'java', 'com', 'workflowplatform', 'controlplane', 'runtime', 'internal', 'JdbcDeadLetterDispositionStore.java'),
   openapi: path.join(root, 'api', 'openapi', 'workflow-platform.v1.openapi.json'),
   e2eTest: path.join(root, 'test-support', 'src', 'test', 'java', 'com', 'workflowplatform', 'worker', 'RuntimeHappyPathE2EIT.java'),
+  payloadTest: path.join(root, 'payload-storage', 'src', 'test', 'java', 'com', 'workflowplatform', 'payload', 'MinioTenantPayloadStoreIT.java'),
+  managedHttpTest: path.join(root, 'worker', 'src', 'test', 'java', 'com', 'workflowplatform', 'worker', 'ManagedHttpWorkerNodeExecutorTests.java'),
+  workerStoreTest: path.join(root, 'worker', 'src', 'test', 'java', 'com', 'workflowplatform', 'worker', 'internal', 'JdbcWorkerTaskStoreIT.java'),
 };
 let mutationCount = 0;
 
@@ -55,7 +59,7 @@ try {
     const contract = JSON.parse(source);
     contract.verifiedTasks.pop();
     return `${JSON.stringify(contract, null, 2)}\n`;
-  }, 'G5-01..G5-08 verified task set drift');
+  }, 'G5-01..G5-13 verified task set drift');
   reject('attempt-counter-on-retry', 'transitionStore', (source) => source.replace("? = 'RUNNING' THEN attempt_no + 1", "? = 'RETRY_WAIT' THEN attempt_no + 1"), "? = 'RUNNING' THEN attempt_no + 1");
   reject('expired-fence-accepted', 'workerStore', (source) => source.replaceAll('lease_expire_at > ?', 'lease_expire_at IS NOT NULL'), 'lease_expire_at > ?');
   reject('exponential-retry-removed', 'retryPlanner', (source) => source.replace('case "exponential"', 'case "removed-exponential"'), 'case "exponential"');
@@ -69,6 +73,13 @@ try {
     return `${JSON.stringify(api, null, 2)}\n`;
   }, 'G5-08 OpenAPI operation is missing');
   reject('crash-recovery-e2e-removed', 'e2eTest', (source) => source.replace('killedWorkerLeaseIsRecoveredAndItsLateResultIsFenced', 'recoveryScenarioRemoved'), 'killedWorkerLeaseIsRecoveredAndItsLateResultIsFenced');
+  reject('payload-tenant-authorization-removed', 'payloadStore', (source) => source.replace('payload reference does not belong to the requesting tenant', 'tenant check removed'), 'payload reference does not belong to the requesting tenant');
+  reject('payload-content-digest-removed', 'payloadStore', (source) => source.replace('!identity.digest().equals(PayloadDigests.sha256(payload))', 'false'), '!identity.digest().equals(PayloadDigests.sha256(payload))');
+  reject('payload-expiry-delete-removed', 'payloadStore', (source) => source.replace('client.removeObject(', 'client.statObject('), 'client.removeObject(');
+  reject('real-minio-negative-tests-removed', 'payloadTest', (source) => source.replace('enforcesArchiveAndDeleteBoundariesAgainstRealObjectTagsAndRemoval', 'lifecycleScenarioRemoved'), 'enforcesArchiveAndDeleteBoundariesAgainstRealObjectTagsAndRemoval');
+  reject('database-outage-test-removed', 'workerStoreTest', (source) => source.replace('realDatabasePauseRollsBackWithoutHalfCommitAndRecoversExactlyOnce', 'databaseOutageScenarioRemoved'), 'realDatabasePauseRollsBackWithoutHalfCommitAndRecoversExactlyOnce');
+  reject('network-timeout-test-removed', 'managedHttpTest', (source) => source.replace('realTlsPeerStallTimesOutWithoutProducingASuccess', 'networkTimeoutScenarioRemoved'), 'realTlsPeerStallTimesOutWithoutProducingASuccess');
+  reject('combined-minio-kafka-e2e-removed', 'e2eTest', (source) => source.replaceAll('duplicateTaskEvent', 'removedDuplicateTaskEvent'), 'duplicateTaskEvent');
   console.log(`G5 reliability verifier tests PASS: positive contract plus ${mutationCount} reverse mutations.`);
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });

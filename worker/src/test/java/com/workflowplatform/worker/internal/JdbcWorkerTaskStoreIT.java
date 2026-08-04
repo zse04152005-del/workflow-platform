@@ -2,6 +2,7 @@ package com.workflowplatform.worker.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,6 +76,10 @@ class JdbcWorkerTaskStoreIT {
             UUID.fromString("0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c53d");
     private static final UUID EVENT_DEAD_ID =
             UUID.fromString("0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c53e");
+    private static final UUID NODE_OUTAGE_ID =
+            UUID.fromString("0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c540");
+    private static final UUID EVENT_OUTAGE_ID =
+            UUID.fromString("0194fdcb-8f5d-7cc3-98c5-3f2f0fb7c541");
     private static final String TRACE_ID = "fedcba0987654321fedcba0987654321";
     private static final String DIGEST = "3".repeat(64);
     private static final String STORE_TOKEN = "dispatch:worker-it:store";
@@ -106,7 +111,10 @@ class JdbcWorkerTaskStoreIT {
                                 POSTGRES.getJdbcUrl(), ADMIN_USER, ADMIN_CREDENTIAL));
         DriverManagerDataSource applicationDataSource =
                 new DriverManagerDataSource(
-                        POSTGRES.getJdbcUrl(), APPLICATION_USER, APPLICATION_CREDENTIAL);
+                        POSTGRES.getJdbcUrl()
+                                + "?connectTimeout=2&socketTimeout=2&tcpKeepAlive=true",
+                        APPLICATION_USER,
+                        APPLICATION_CREDENTIAL);
         objectMapper = new ObjectMapper();
         store =
                 new JdbcWorkerTaskStore(
@@ -383,6 +391,79 @@ class JdbcWorkerTaskStoreIT {
 
     @Test
     @Order(8)
+    void realDatabasePauseRollsBackWithoutHalfCommitAndRecoversExactlyOnce() {
+        WorkerTaskStore.ClaimedTask outageTask =
+                store.claim(
+                                event(EVENT_OUTAGE_ID, NODE_OUTAGE_ID),
+                                "workflow-worker",
+                                "worker-outage")
+                        .task();
+        WorkerTaskStore.NodeExecutionResult success =
+                WorkerTaskStore.NodeExecutionResult.success(
+                        "instance-input:" + INSTANCE_ID, DIGEST);
+
+        POSTGRES.getDockerClient().pauseContainerCmd(POSTGRES.getContainerId()).exec();
+        try {
+            assertTimeoutPreemptively(
+                    Duration.ofSeconds(10),
+                    () ->
+                            assertThrows(
+                                    RuntimeException.class,
+                                    () -> store.complete(outageTask, "worker-outage", success)));
+        } finally {
+            POSTGRES.getDockerClient().unpauseContainerCmd(POSTGRES.getContainerId()).exec();
+        }
+
+        assertEquals("RUNNING", nodeStatus(NODE_OUTAGE_ID));
+        assertEquals(
+                1,
+                count(
+                        "SELECT count(*) FROM public.task_execution WHERE execution_id = ? "
+                                + "AND status = 'RUNNING'",
+                        outageTask.executionId()));
+        assertEquals(
+                1,
+                count(
+                        "SELECT count(*) FROM public.worker_lease WHERE node_instance_id = ? "
+                                + "AND status = 'ACTIVE'",
+                        NODE_OUTAGE_ID));
+        assertEquals(
+                0,
+                count(
+                        "SELECT count(*) FROM public.processed_event WHERE event_id = ?",
+                        EVENT_OUTAGE_ID));
+        assertEquals(
+                1,
+                count(
+                        "SELECT count(*) FROM public.audit_log WHERE resource_id = ?",
+                        NODE_OUTAGE_ID.toString()));
+        assertEquals(
+                1,
+                count(
+                        "SELECT count(*) FROM public.outbox_event WHERE aggregate_id = ?",
+                        NODE_OUTAGE_ID));
+
+        store.complete(outageTask, "worker-outage", success);
+        assertEquals("SUCCEEDED", nodeStatus(NODE_OUTAGE_ID));
+        assertEquals(
+                1,
+                count(
+                        "SELECT count(*) FROM public.processed_event WHERE event_id = ?",
+                        EVENT_OUTAGE_ID));
+        assertEquals(
+                2,
+                count(
+                        "SELECT count(*) FROM public.audit_log WHERE resource_id = ?",
+                        NODE_OUTAGE_ID.toString()));
+        assertEquals(
+                2,
+                count(
+                        "SELECT count(*) FROM public.outbox_event WHERE aggregate_id = ?",
+                        NODE_OUTAGE_ID));
+    }
+
+    @Test
+    @Order(9)
     void anotherTenantCannotDiscoverTheDispatchedNode() {
         WorkerTaskStore.TaskReadyEvent crossTenant =
                 new WorkerTaskStore.TaskReadyEvent(
@@ -513,6 +594,7 @@ class JdbcWorkerTaskStoreIT {
                 "{\"_retry\":{\"maxAttempts\":3,\"strategy\":\"fixed\","
                         + "\"initialDelay\":\"PT5S\",\"jitterRatio\":0}}");
         insertDispatchedNode(NODE_DEAD_ID, "dead", "dispatch:worker-it:dead", "{}");
+        insertDispatchedNode(NODE_OUTAGE_ID, "outage", "dispatch:worker-it:outage", "{}");
     }
 
     private static void insertDispatchedNode(UUID nodeId, String definitionNodeId, String token) {

@@ -21,7 +21,9 @@ public interface RuntimeTriggerStore {
             UUID idempotencyRecordId,
             String idempotencyScope,
             String keyDigest,
-            String requestDigest) {
+            String requestDigest,
+            String inputReference,
+            String inputDigest) {
 
         public RuntimeTriggerCommand {
             Objects.requireNonNull(context, "context");
@@ -33,6 +35,10 @@ public interface RuntimeTriggerStore {
             idempotencyScope = Objects.requireNonNull(idempotencyScope, "idempotencyScope");
             keyDigest = requireDigest(keyDigest, "keyDigest");
             requestDigest = requireDigest(requestDigest, "requestDigest");
+            if (inputReference != null && inputReference.isBlank()) {
+                throw new IllegalArgumentException("inputReference must not be blank");
+            }
+            inputDigest = requireDigest(inputDigest, "inputDigest");
         }
 
         private static String requireDigest(String value, String name) {
